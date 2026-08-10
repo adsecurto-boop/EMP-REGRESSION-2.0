@@ -28,9 +28,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
+        shell: powershell
         run: |
-          npm install --include=optional
-          npm install --no-save @rollup/rollup-win32-x64-msvc @esbuild/win32-x64 lightningcss-win32-x64-msvc
+          if (Test-Path package-lock.json) { Remove-Item package-lock.json -Force }
+          npm install --force
+          npm install --no-save @tailwindcss/oxide-win32-x64-msvc @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @esbuild/win32-x64
           pip install playwright requests
 
       - name: Install Playwright Browsers (Chrome)
