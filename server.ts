@@ -1,12 +1,29 @@
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
 
+// Safe directory determination supporting ESM and bundled CJS
+let currentDir = process.cwd();
+try {
+  if (typeof __dirname !== "undefined") {
+    currentDir = __dirname;
+  } else if (import.meta && import.meta.url) {
+    currentDir = path.dirname(fileURLToPath(import.meta.url));
+  }
+} catch {
+  // fallback
+}
+
+const ROOT_DIR = (currentDir.endsWith("dist") || currentDir.endsWith("dist" + path.sep))
+  ? path.resolve(currentDir, "..")
+  : process.cwd();
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
 
@@ -27,11 +44,10 @@ async function startServer() {
       }
     }
 
-    exec(cmd, { cwd: process.cwd() }, (error, stdout, stderr) => {
+    exec(cmd, { cwd: ROOT_DIR }, (error, stdout, stderr) => {
       let reportData = null;
       try {
-        // Try to find latest report json in reports/ directory if generated
-        const reportsDir = path.join(process.cwd(), "reports");
+        const reportsDir = path.join(ROOT_DIR, "reports");
         if (fs.existsSync(reportsDir)) {
           const subdirs = fs.readdirSync(reportsDir).sort().reverse();
           if (subdirs.length > 0) {
@@ -58,7 +74,7 @@ async function startServer() {
   // API to get feature profiles
   app.get("/api/features", (req, res) => {
     try {
-      const featuresPath = path.join(process.cwd(), "config", "features.json");
+      const featuresPath = path.join(ROOT_DIR, "config", "features.json");
       if (fs.existsSync(featuresPath)) {
         const data = JSON.parse(fs.readFileSync(featuresPath, "utf-8"));
         res.json(data.profiles || []);
@@ -73,7 +89,7 @@ async function startServer() {
   // API to get framework details
   app.get("/api/framework", (req, res) => {
     try {
-      const fwPath = path.join(process.cwd(), "config", "framework.json");
+      const fwPath = path.join(ROOT_DIR, "config", "framework.json");
       if (fs.existsSync(fwPath)) {
         const data = JSON.parse(fs.readFileSync(fwPath, "utf-8"));
         res.json(data);
@@ -87,9 +103,10 @@ async function startServer() {
 
   // API to get Desktop App & Chrome Browser Environment status
   app.get("/api/desktop/status", (req, res) => {
-    const playwrightProfileExists = fs.existsSync(path.join(process.cwd(), "playwright-profile"));
-    const recordingsCount = fs.existsSync(path.join(process.cwd(), "recordings"))
-      ? fs.readdirSync(path.join(process.cwd(), "recordings")).filter(f => f.endsWith(".py")).length
+    const playwrightProfileExists = fs.existsSync(path.join(ROOT_DIR, "playwright-profile"));
+    const recordingsDir = path.join(ROOT_DIR, "recordings");
+    const recordingsCount = fs.existsSync(recordingsDir)
+      ? fs.readdirSync(recordingsDir).filter(f => f.endsWith(".py")).length
       : 0;
 
     res.json({
@@ -107,7 +124,7 @@ async function startServer() {
   app.post("/api/chrome/launch-check", (req, res) => {
     const { recordingScript } = req.body || {};
     const scriptToRun = recordingScript || "002_dashboard_home.py";
-    const scriptPath = path.join(process.cwd(), "recordings", scriptToRun);
+    const scriptPath = path.join(ROOT_DIR, "recordings", scriptToRun);
 
     if (!fs.existsSync(scriptPath)) {
       return res.status(404).json({ error: `Recording script ${scriptToRun} not found.` });
@@ -115,7 +132,7 @@ async function startServer() {
 
     const pythonExe = process.platform === "win32" ? "python" : "python3";
     const cmd = `${pythonExe} recordings/${scriptToRun}`;
-    exec(cmd, { cwd: process.cwd() }, (error, stdout, stderr) => {
+    exec(cmd, { cwd: ROOT_DIR }, (error, stdout, stderr) => {
       res.json({
         success: !error || error.code === 0,
         scriptExecuted: scriptToRun,
@@ -133,7 +150,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = path.join(ROOT_DIR, "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
