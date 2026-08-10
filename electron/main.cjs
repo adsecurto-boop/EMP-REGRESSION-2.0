@@ -1,10 +1,9 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, utilityProcess } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
-const { spawn } = require('child_process');
 
 let mainWindow;
-let pyProcess = null;
+let backendProcess = null;
 
 // Configure autoUpdater logs
 autoUpdater.logger = console;
@@ -45,16 +44,35 @@ function createWindow() {
 }
 
 function startBackendServer() {
-  // Start server if packaged or needed
+  // Start server if packaged
   if (app.isPackaged) {
     const serverScript = path.join(__dirname, '../dist/server.cjs');
-    pyProcess = spawn('node', [serverScript], {
-      cwd: path.join(__dirname, '..'),
-      env: { ...process.env, PORT: '3000', NODE_ENV: 'production' }
-    });
+    try {
+      if (utilityProcess) {
+        backendProcess = utilityProcess.fork(serverScript, [], {
+          cwd: path.join(__dirname, '..'),
+          env: { ...process.env, PORT: '3000', NODE_ENV: 'production' },
+          stdio: 'pipe'
+        });
 
-    pyProcess.stdout?.on('data', (data) => console.log(`Backend: ${data}`));
-    pyProcess.stderr?.on('data', (data) => console.error(`Backend ERR: ${data}`));
+        if (backendProcess.stdout) {
+          backendProcess.stdout.on('data', (data) => console.log(`Backend: ${data.toString()}`));
+        }
+        if (backendProcess.stderr) {
+          backendProcess.stderr.on('data', (data) => console.error(`Backend ERR: ${data.toString()}`));
+        }
+
+        backendProcess.on('error', (err) => {
+          console.error('Backend process error:', err);
+        });
+
+        backendProcess.on('exit', (code) => {
+          console.log(`Backend process exited with code ${code}`);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to start backend server:', err);
+    }
   }
 }
 
@@ -73,7 +91,13 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (pyProcess) pyProcess.kill();
+  if (backendProcess) {
+    try {
+      backendProcess.kill();
+    } catch (e) {
+      console.error('Error stopping backend process:', e);
+    }
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
