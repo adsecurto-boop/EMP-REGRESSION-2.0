@@ -19,7 +19,7 @@ function createWindow() {
     title: 'EmpMonitor Desktop Dashboard Runner',
     backgroundColor: '#020617',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false,

@@ -16,7 +16,7 @@
     "run.py"
   ],
   "extraMetadata": {
-    "main": "electron/main.js"
+    "main": "electron/main.cjs"
   },
   "win": {
     "target": [
