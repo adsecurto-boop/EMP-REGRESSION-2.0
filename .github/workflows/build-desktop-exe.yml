@@ -29,8 +29,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install
-          npm install --no-save @rollup/rollup-win32-x64-msvc @esbuild/win32-x64
+          npm install --include=optional
+          npm install --no-save @rollup/rollup-win32-x64-msvc @esbuild/win32-x64 lightningcss-win32-x64-msvc
           pip install playwright requests
 
       - name: Install Playwright Browsers (Chrome)
