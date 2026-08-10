@@ -1,25 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { Play, CheckCircle2, AlertTriangle, XCircle, ShieldAlert, Layers, RefreshCw, FileText, Server, Activity, ChevronRight } from 'lucide-react';
-import { FeatureProfile, RunReport } from './types';
+import {
+  Play, CheckCircle2, AlertTriangle, XCircle, ShieldAlert, Layers, RefreshCw, FileText,
+  Server, Activity, ChevronRight, Monitor, Globe, Download, Github, Cpu, Radio, Sparkles
+} from 'lucide-react';
+import { FeatureProfile } from './types';
+
+interface DesktopStatus {
+  environment: string;
+  chromeProfileAvailable: boolean;
+  playwrightProfilePath: string;
+  recordingsAvailable: number;
+  githubRepo: string;
+  autoUpdaterProvider: string;
+  buildTarget: string;
+}
+
+interface UpdaterInfo {
+  status: string;
+  message: string;
+  progress?: number;
+  info?: any;
+  error?: string;
+}
 
 export default function App() {
   const [features, setFeatures] = useState<FeatureProfile[]>([]);
+  const [desktopStatus, setDesktopStatus] = useState<DesktopStatus | null>(null);
   const [selectedPlugin, setSelectedPlugin] = useState<string>('');
   const [environment, setEnvironment] = useState<string>('local');
   const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [selectedScript, setSelectedScript] = useState<string>('002_dashboard_home.py');
+  const [isChromeRunning, setIsChromeRunning] = useState<boolean>(false);
+  const [chromeOutput, setChromeOutput] = useState<{ stdout: string; stderr: string; success?: boolean } | null>(null);
+
+  const [updaterState, setUpdaterState] = useState<UpdaterInfo>({
+    status: 'idle',
+    message: 'Ready to check for GitHub updates'
+  });
+
+  const [appVersion, setAppVersion] = useState<string>('0.1.0');
+
   const [runResult, setRunResult] = useState<{
     stdout: string;
     stderr: string;
     exitCode: number;
     report: any;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<'features' | 'console' | 'report'>('features');
+
+  const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report'>('desktop');
 
   useEffect(() => {
     fetch('/api/features')
       .then((res) => res.json())
       .then((data) => setFeatures(data))
       .catch((err) => console.error(err));
+
+    fetch('/api/desktop/status')
+      .then((res) => res.json())
+      .then((data) => setDesktopStatus(data))
+      .catch((err) => console.error(err));
+
+    // Listen to Electron IPC auto updater events if running inside Electron desktop app
+    if ((window as any).electronAPI) {
+      (window as any).electronAPI.getAppVersion().then((ver: string) => setAppVersion(ver));
+
+      const cleanup = (window as any).electronAPI.onUpdaterStatus((info: UpdaterInfo) => {
+        setUpdaterState(info);
+      });
+
+      return () => {
+        if (cleanup) cleanup();
+      };
+    }
   }, []);
 
   const handleRun = (checkOnly = false, pluginOverride?: string) => {
@@ -47,17 +99,60 @@ export default function App() {
       });
   };
 
+  const handleLaunchChromeScript = () => {
+    setIsChromeRunning(true);
+    setChromeOutput(null);
+
+    fetch('/api/chrome/launch-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recordingScript: selectedScript })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setChromeOutput(data);
+        setIsChromeRunning(false);
+      })
+      .catch((err) => {
+        setChromeOutput({ stdout: '', stderr: String(err), success: false });
+        setIsChromeRunning(false);
+      });
+  };
+
+  const handleCheckUpdates = () => {
+    if ((window as any).electronAPI) {
+      setUpdaterState({ status: 'checking', message: 'Connecting to GitHub Releases...' });
+      (window as any).electronAPI.checkForUpdates();
+    } else {
+      setUpdaterState({
+        status: 'web',
+        message: 'Running in Web Browser / Cloud Run container environment. Auto-updater operates inside the packaged .exe desktop client.'
+      });
+    }
+  };
+
+  const handleRestartAndInstall = () => {
+    if ((window as any).electronAPI) {
+      (window as any).electronAPI.restartAndInstall();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Navigation / Header */}
+      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="bg-indigo-600 p-2 rounded-lg text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
-            <ShieldAlert className="w-6 h-6" />
+          <div className="bg-indigo-600 p-2.5 rounded-xl text-white font-bold text-xl shadow-lg shadow-indigo-500/20 flex items-center justify-center">
+            <Monitor className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white tracking-wide">EmpMonitor Automation Framework</h1>
-            <p className="text-xs text-slate-400">Multi-Layer Evidence & Regression Validation Suite (v0.1.0)</p>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-lg font-bold text-white tracking-wide">EmpMonitor Desktop & Chrome Suite</h1>
+              <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold">
+                v{appVersion}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Integrated Chrome Browser Inspection & GitHub Auto-Updating EXE Client</p>
           </div>
         </div>
 
@@ -70,7 +165,7 @@ export default function App() {
               onChange={(e) => setEnvironment(e.target.value)}
               className="bg-transparent text-xs text-indigo-400 font-semibold focus:outline-none"
             >
-              <option value="local">local</option>
+              <option value="local">local (EmpMonitor runtime)</option>
             </select>
           </div>
 
@@ -89,14 +184,14 @@ export default function App() {
             className="flex items-center space-x-2 px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span>{isRunning ? 'Running...' : 'Run Selected Suite'}</span>
+            <span>{isRunning ? 'Running...' : 'Run Regression Suite'}</span>
           </button>
         </div>
       </header>
 
-      {/* Main Content Layout */}
+      {/* Main Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar / Plugin Selector */}
+        {/* Sidebar */}
         <aside className="w-80 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col">
           <div className="mb-4">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Execution Target</h2>
@@ -140,10 +235,32 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Workspace Display */}
+        {/* Content Area */}
         <main className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
-          {/* Tabs */}
+          {/* Navigation Tabs */}
           <div className="border-b border-slate-800 px-6 flex space-x-6 bg-slate-900/20">
+            <button
+              onClick={() => setActiveTab('desktop')}
+              className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition ${
+                activeTab === 'desktop'
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Desktop App & Auto-Updater</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('chrome')}
+              className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition ${
+                activeTab === 'chrome'
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>Chrome Dashboard Inspector</span>
+            </button>
             <button
               onClick={() => setActiveTab('features')}
               className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition ${
@@ -164,7 +281,7 @@ export default function App() {
               }`}
             >
               <Activity className="w-4 h-4" />
-              <span>Execution Logs & Console</span>
+              <span>Execution Console</span>
             </button>
             <button
               onClick={() => setActiveTab('report')}
@@ -179,8 +296,205 @@ export default function App() {
             </button>
           </div>
 
-          {/* Tab Content */}
-          <div className="flex-1 p-6 overflow-y-auto">
+          {/* Main Body */}
+          <div className="flex-1 p-6 overflow-y-auto space-y-6">
+            {activeTab === 'desktop' && (
+              <div className="space-y-6">
+                {/* Auto Updater Card */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-6 opacity-10">
+                    <Sparkles className="w-32 h-32 text-indigo-400" />
+                  </div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20">
+                          <Radio className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">GitHub Auto-Updater Control</h3>
+                          <p className="text-xs text-slate-400">Automated desktop release checks via GitHub Releases feed</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleCheckUpdates}
+                        className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-xs transition shadow-lg shadow-indigo-600/30"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Check for Updates</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Updater Status:</span>
+                        <span className="font-semibold text-indigo-400">{updaterState.status.toUpperCase()}</span>
+                      </div>
+                      <p className="text-xs text-slate-300">{updaterState.message}</p>
+
+                      {updaterState.progress !== undefined && (
+                        <div className="space-y-1">
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div
+                              className="bg-indigo-500 h-full transition-all duration-300"
+                              style={{ width: `${updaterState.progress}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-right text-slate-400">{Math.round(updaterState.progress)}% downloaded</div>
+                        </div>
+                      )}
+
+                      {updaterState.status === 'downloaded' && (
+                        <button
+                          onClick={handleRestartAndInstall}
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/30"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Restart & Install Update Now</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
+                        <Cpu className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">EmpMonitor Environment</h4>
+                        <p className="text-xs text-slate-400">Target host execution context</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Environment</span>
+                        <span className="text-slate-200 font-medium">{desktopStatus?.environment || 'EmpMonitor Local'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Playwright Chrome Profile</span>
+                        <span className="text-emerald-400 font-semibold">Available (`playwright-profile`)</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Dashboard Recordings</span>
+                        <span className="text-slate-200 font-medium">{desktopStatus?.recordingsAvailable ?? 4} Python Scripts</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+                        <Github className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">GitHub CI/CD & EXE Packaging</h4>
+                        <p className="text-xs text-slate-400">Automated builds & releases</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Repository</span>
+                        <span className="text-indigo-400 font-mono font-medium">{desktopStatus?.githubRepo || 'adsecurto-boop/Emp_Regression_suite'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Workflow File</span>
+                        <span className="text-slate-200 font-mono">.github/workflows/build-desktop-exe.yml</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-800">
+                        <span className="text-slate-400">Target Executable</span>
+                        <span className="text-slate-200 font-medium">Windows x64 (.exe installer + portable)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How Changes Auto-Reflect in Desktop EXE</h4>
+                  <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2">
+                    <li><strong className="text-slate-200">Commit & Push:</strong> Whenever you commit code changes to the GitHub repository, GitHub Actions automatically triggers <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">build-desktop-exe.yml</code>.</li>
+                    <li><strong className="text-slate-200">Executable Artifact Generation:</strong> The GitHub runner compiles the web application, packages Electron desktop files, generates <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">.exe</code> installer & <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">latest.yml</code> manifest.</li>
+                    <li><strong className="text-slate-200">Auto-Update:</strong> When users launch the desktop app on Windows, <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">electron-updater</code> automatically fetches the update from GitHub Releases and prompts to restart & install.</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'chrome' && (
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Chrome Browser Dashboard Automation</h3>
+                      <p className="text-xs text-slate-400">Runs Chrome Playwright recording scripts against EmpMonitor dashboard using the local profile</p>
+                    </div>
+                    <button
+                      onClick={handleLaunchChromeScript}
+                      disabled={isChromeRunning}
+                      className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>{isChromeRunning ? 'Launching Chrome...' : 'Run Chrome Check'}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Select Recording Script</label>
+                      <select
+                        value={selectedScript}
+                        onChange={(e) => setSelectedScript(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="001_login.py">001_login.py - Login Page Verification</option>
+                        <option value="002_dashboard_home.py">002_dashboard_home.py - Dashboard Home Overview</option>
+                        <option value="011_monitoring_settings.py">011_monitoring_settings.py - Monitoring Settings Check</option>
+                        <option value="012_employee_management.py">012_employee_management.py - Employee Management Page</option>
+                      </select>
+                    </div>
+
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-xs text-slate-400 space-y-1">
+                      <div className="text-slate-300 font-semibold">Chrome Environment Context:</div>
+                      <div>• Profile Path: <code className="text-indigo-400">/playwright-profile</code></div>
+                      <div>• Target Browser: Google Chrome (Chromium)</div>
+                      <div>• Headless / Automated Execution Mode</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Output Console */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Chrome Browser Output Logs</h4>
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-300 whitespace-pre-wrap min-h-[300px]">
+                    {isChromeRunning ? (
+                      <div className="flex items-center space-x-2 text-indigo-400">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Initializing Chrome browser session with Playwright...</span>
+                      </div>
+                    ) : chromeOutput ? (
+                      <>
+                        <div className="text-emerald-400 font-semibold mb-2">
+                          Executed: {chromeOutput.scriptExecuted || selectedScript}
+                        </div>
+                        {chromeOutput.stdout || <span className="text-slate-500">Script completed with no stdout output.</span>}
+                        {chromeOutput.stderr && (
+                          <div className="text-amber-400 mt-2 pt-2 border-t border-slate-800">
+                            {chromeOutput.stderr}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-slate-600">Click "Run Chrome Check" to launch the browser test script.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'features' && (
               <div className="space-y-6">
                 <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5">

@@ -1,0 +1,48 @@
+{
+  "appId": "com.empmonitor.regression.suite",
+  "productName": "EmpMonitor Desktop Dashboard Runner",
+  "copyright": "Copyright © 2026 EmpMonitor",
+  "directories": {
+    "output": "dist-electron",
+    "buildResources": "assets"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "config/**/*",
+    "framework/**/*",
+    "plugins/**/*",
+    "recordings/**/*",
+    "run.py"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "EmpMonitor Runner",
+    "deleteAppDataOnUninstall": false
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "adsecurto-boop",
+    "repo": "Emp_Regression_suite",
+    "releaseType": "release"
+  }
+}

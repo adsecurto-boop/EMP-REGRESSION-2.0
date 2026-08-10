@@ -2,15 +2,20 @@
   "name": "emp-regression-suite",
   "private": true,
   "version": "0.1.0",
+  "main": "electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs"
+    "start": "node dist/server.cjs",
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder --config electron-builder.json",
+    "build:exe": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
+    "electron-updater": "^6.8.9",
     "express": "^4.21.2",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
@@ -25,6 +30,8 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.0.6",
     "tsx": "^4.19.2",

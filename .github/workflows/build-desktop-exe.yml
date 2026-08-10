@@ -1,0 +1,53 @@
+name: Build & Release Desktop EXE
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          pip install playwright requests
+
+      - name: Install Playwright Browsers (Chrome)
+        run: npx playwright install chromium
+
+      - name: Build Web App & Backend
+        run: npm run build
+
+      - name: Build and Publish Windows Desktop Executable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx electron-builder --win --x64 --publish always
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmpMonitor-Desktop-EXE
+          path: |
+            dist-electron/*.exe
+            dist-electron/latest.yml

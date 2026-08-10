@@ -84,6 +84,45 @@ async function startServer() {
     }
   });
 
+  // API to get Desktop App & Chrome Browser Environment status
+  app.get("/api/desktop/status", (req, res) => {
+    const playwrightProfileExists = fs.existsSync(path.join(process.cwd(), "playwright-profile"));
+    const recordingsCount = fs.existsSync(path.join(process.cwd(), "recordings"))
+      ? fs.readdirSync(path.join(process.cwd(), "recordings")).filter(f => f.endsWith(".py")).length
+      : 0;
+
+    res.json({
+      environment: "EmpMonitor Integrated Runtime Environment",
+      chromeProfileAvailable: playwrightProfileExists,
+      playwrightProfilePath: "playwright-profile",
+      recordingsAvailable: recordingsCount,
+      githubRepo: "adsecurto-boop/Emp_Regression_suite",
+      autoUpdaterProvider: "GitHub Releases (electron-updater)",
+      buildTarget: "Windows x64 Desktop (.exe installer & portable)"
+    });
+  });
+
+  // API to run Chrome Browser Dashboard validation script
+  app.post("/api/chrome/launch-check", (req, res) => {
+    const { recordingScript } = req.body || {};
+    const scriptToRun = recordingScript || "002_dashboard_home.py";
+    const scriptPath = path.join(process.cwd(), "recordings", scriptToRun);
+
+    if (!fs.existsSync(scriptPath)) {
+      return res.status(404).json({ error: `Recording script ${scriptToRun} not found.` });
+    }
+
+    const cmd = `python3 recordings/${scriptToRun}`;
+    exec(cmd, { cwd: process.cwd() }, (error, stdout, stderr) => {
+      res.json({
+        success: !error || error.code === 0,
+        scriptExecuted: scriptToRun,
+        stdout,
+        stderr: stderr || (error ? error.message : "")
+      });
+    });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
