@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Run output: generated per run, never committed.
+# Canonical reference evidence lives in baselines/ and IS committed.
+reports/*
+!reports/.gitkeep
+
+# Local overrides
+config/environments/*.local.json

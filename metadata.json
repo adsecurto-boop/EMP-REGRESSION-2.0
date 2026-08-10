@@ -1,0 +1,6 @@
+{
+  "name": "EmpMonitor Automation Suite",
+  "description": "Multi-layer evidence-based regression test suite for EmpMonitor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

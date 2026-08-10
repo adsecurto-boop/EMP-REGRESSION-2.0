@@ -1,0 +1,571 @@
+{
+  "_provenance": "Feature profiles. verification_status reflects how well the FEATURE's mechanism is established, per knowledge_base/README.md section 6. Verified means the mechanism was directly observed; Partially Verified means supporting artifacts were observed but the feature's operation was not; Hypothesis means no artifact was identified at all. Dashboard pages are Hypothesis throughout -- the dashboard has never been observed.",
+  "_dashboard_caveat": "expected_dashboard_pages reference docs/design/Dashboard_Navigation.md, which is an unobserved model. No dashboard page has been visited by anything.",
+  "profiles": [
+    {
+      "feature_id": "EM010_Screenshots",
+      "name": "Screenshots",
+      "verification_status": "Partially Verified",
+      "required_configuration": [
+        "appSettings/screenshotQuality",
+        "appSettings/from_remote\\screenshotPeriodSec"
+      ],
+      "expected_upload_interval_key": "appSettings/from_remote\\screenshotPeriodSec",
+      "expected_dashboard_pages": [
+        "screenshots"
+      ],
+      "expected_runtime_components": [
+        "empmonitor.exe"
+      ],
+      "expected_log_patterns": [
+        "upload_cycle_trigger"
+      ],
+      "expected_sqlite_tables": [
+        "pending_screenshots6"
+      ],
+      "expected_apis": [
+        "add-activity"
+      ],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "capture interval drifts from configuration"
+      ],
+      "note": "Config keys and pending_screenshots6 table VERIFIED present (Phase 2/3). No screenshot capture or upload was observed."
+    },
+    {
+      "feature_id": "EM011_ScreenRecording",
+      "name": "Screen Recording",
+      "verification_status": "Partially Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "recordings"
+      ],
+      "expected_runtime_components": [
+        "esr.exe"
+      ],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "esr.exe VERIFIED present and running, with ffmpeg DLLs. No recording or upload observed; no recording table identified."
+    },
+    {
+      "feature_id": "EM012_LiveMonitoring",
+      "name": "Live Monitoring",
+      "verification_status": "Partially Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "live_monitoring"
+      ],
+      "expected_runtime_components": [
+        "esr.exe",
+        "empmonitor.exe"
+      ],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-007",
+        "EV-011",
+        "EV-017"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "stream not established",
+        "stream established but not rendered"
+      ],
+      "note": "A wss endpoint is VERIFIED configured in config.js and Qt5WebSockets ships with the agent; live streaming itself was never observed."
+    },
+    {
+      "feature_id": "EM013_Attendance",
+      "name": "Attendance",
+      "verification_status": "Partially Verified",
+      "required_configuration": [
+        "settings/data\\trackingMode"
+      ],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "timesheet",
+        "reports"
+      ],
+      "expected_runtime_components": [
+        "empmonitor.exe"
+      ],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "clock_data6"
+      ],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "clock event recorded with wrong state"
+      ],
+      "note": "clock_data6 VERIFIED present with columns type/mode/status/reason/startDate/endDate; settings/data\\trackingMode VERIFIED present. Their relationship to attendance is inferred, not observed."
+    },
+    {
+      "feature_id": "EM014_IdleTime",
+      "name": "Idle Time",
+      "verification_status": "Partially Verified",
+      "required_configuration": [
+        "appSettings/todayRemainingBreakInSeconds"
+      ],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "timesheet"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "clock_data6"
+      ],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "idle not detected",
+        "idle time misattributed"
+      ],
+      "note": "appSettings/todayRemainingBreakInSeconds VERIFIED present, which evidences break/idle accounting. Idle detection itself unobserved."
+    },
+    {
+      "feature_id": "EM015_Timesheet",
+      "name": "Timesheet",
+      "verification_status": "Hypothesis",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "timesheet"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "clock_data6",
+        "usagedata6"
+      ],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "No timesheet-specific artifact identified. Most likely a dashboard-side aggregation of clock/usage data, which would make it primarily an L4 feature."
+    },
+    {
+      "feature_id": "EM016_Keystrokes",
+      "name": "Keystrokes",
+      "verification_status": "Hypothesis",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "No keystroke table, config key, or log pattern was observed. clipboardData exists but is clipboard content, not keystrokes. Whether this feature is present in this build is unknown."
+    },
+    {
+      "feature_id": "EM017_ApplicationUsage",
+      "name": "Application Usage",
+      "verification_status": "Partially Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [
+        "empmonitor.exe"
+      ],
+      "expected_log_patterns": [
+        "config_refresh"
+      ],
+      "expected_sqlite_tables": [
+        "usagedata6",
+        "pending_usagedata6"
+      ],
+      "expected_apis": [
+        "add-activity"
+      ],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "usagedata6 (populated) and pending_usagedata6 VERIFIED present; UploadBlock app block-list log lines VERIFIED. Attribution of usagedata6 to application usage is inferred."
+    },
+    {
+      "feature_id": "EM018_WebsiteUsage",
+      "name": "Website Usage",
+      "verification_status": "Partially Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [
+        "empmonitor.exe",
+        "emp_psa_service.exe"
+      ],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "usagedata6",
+        "pending_usagedata6",
+        "download_history"
+      ],
+      "expected_apis": [
+        "add-activity"
+      ],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "browser traffic not intercepted"
+      ],
+      "note": "BrowserHandlingService and WinDivert driver VERIFIED present, and website block-list log lines VERIFIED. Interception behaviour itself unobserved."
+    },
+    {
+      "feature_id": "EM019_UsbDetection",
+      "name": "USB Detection",
+      "verification_status": "Partially Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "usbdata6",
+        "pending_usbdata6"
+      ],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "device inserted but not detected"
+      ],
+      "note": "usbdata6 and pending_usbdata6 VERIFIED present, both empty. No USB event was observed."
+    },
+    {
+      "feature_id": "EM020_Webcam",
+      "name": "Webcam",
+      "verification_status": "Hypothesis",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "No webcam table, config key, log pattern, or runtime component identified."
+    },
+    {
+      "feature_id": "EM021_FaceDetection",
+      "name": "Face Detection",
+      "verification_status": "Hypothesis",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "No face-detection artifact identified. Presumably depends on EM020_Webcam."
+    },
+    {
+      "feature_id": "EM022_Productivity",
+      "name": "Productivity",
+      "verification_status": "Hypothesis",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [],
+      "expected_log_patterns": [],
+      "expected_sqlite_tables": [
+        "usagedata6"
+      ],
+      "expected_apis": [],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-001",
+        "EV-002",
+        "EV-003",
+        "EV-007",
+        "EV-011"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing"
+      ],
+      "note": "No productivity-specific artifact identified. Likely a dashboard-side classification of usage data rather than an agent-side capture."
+    },
+    {
+      "feature_id": "EM023_EmailMonitoring",
+      "name": "Email Monitoring",
+      "verification_status": "Verified",
+      "required_configuration": [],
+      "expected_upload_interval_key": null,
+      "expected_dashboard_pages": [
+        "reports"
+      ],
+      "expected_runtime_components": [
+        "EmailMonitorSvc.exe"
+      ],
+      "expected_log_patterns": [
+        "request_dump",
+        "upload_succeeded"
+      ],
+      "expected_sqlite_tables": [
+        "inbound_emails",
+        "outbound_emails",
+        "mail_data",
+        "mail_attachment_data"
+      ],
+      "expected_apis": [
+        "save-email-monitoring-log"
+      ],
+      "expected_validators": [
+        "ConfigurationValidator",
+        "RuntimeValidator",
+        "FrequencyValidator",
+        "TimestampValidator",
+        "CorrelationValidator"
+      ],
+      "expected_evidence": [
+        "EV-003",
+        "EV-007",
+        "EV-011",
+        "EV-013",
+        "EV-017"
+      ],
+      "expected_failure_modes": [
+        "captured but not persisted",
+        "persisted but not uploaded",
+        "uploaded but not surfaced",
+        "configured on but not capturing",
+        "mail proxy not intercepting",
+        "attachment enrichment fails"
+      ],
+      "note": "The most strongly evidenced feature. VERIFIED: EmailMonitorSvc.exe running with six mail-protocol listeners and established provider connections; four mail tables; multipart uploads to save-email-monitoring-log with per-item UPLOAD SUCCEEDED."
+    }
+  ],
+  "_key_escaping_warning": "Configuration keys are compared LITERALLY against INI keys and may contain backslashes (e.g. 'settings/data\\trackingMode'). In JSON a backslash must be written '\\\\'. A single '\\t' is a TAB and will never match. This bit once: the tab form is a valid escape in most languages so no warning fires. Verify new keys with scripts/check_feature_profiles.py."
+}

@@ -1,0 +1,533 @@
+{
+  "organization": null,
+  "build_number": null,
+  "output": {
+    "root": null
+  },
+  "logging": {
+    "level": "INFO",
+    "console": {
+      "enabled": true,
+      "level": "INFO",
+      "format": "text"
+    },
+    "file": {
+      "enabled": true,
+      "level": "DEBUG",
+      "format": "json",
+      "filename": "framework.log",
+      "max_bytes": 10485760,
+      "backup_count": 5
+    }
+  },
+  "validation": {
+    "minimum_corroborating_layers": 2
+  },
+  "plugins": {
+    "package": "plugins"
+  },
+  "empmonitor": {
+    "_provenance": "Values marked verified:true were DIRECTLY OBSERVED on a real installation on 2026-07-30 and are Verified status per knowledge_base/README.md section 6. Values marked verified:false are Hypothesis: stated in the Phase 2 brief but not observed. The flag is load-bearing: an unmet VERIFIED expectation is reported FAILED, an unmet UNVERIFIED expectation is reported INCONCLUSIVE, because absence of something whose name is a guess is not evidence of absence.",
+    "install_roots": [
+      "C:\\Program Files\\EmpMonitor\\EmpMonitor",
+      "C:\\Program Files (x86)\\EmpMonitor\\EmpMonitor"
+    ],
+    "install_roots_verified": true,
+    "data_roots": [
+      "%APPDATA%\\screen"
+    ],
+    "data_roots_verified": true,
+    "executables": [
+      {
+        "role": "agent",
+        "name": "empmonitor.exe",
+        "relative_paths": [
+          "gui/empmonitor.exe"
+        ],
+        "required": true,
+        "verified": true
+      },
+      {
+        "role": "service",
+        "name": "emp_psa_service.exe",
+        "relative_paths": [
+          "service/emp_psa_service.exe"
+        ],
+        "required": true,
+        "verified": true
+      },
+      {
+        "role": "recorder",
+        "any_of": [
+          "esr.exe",
+          "ffmpeg.exe"
+        ],
+        "relative_dirs": [
+          "gui/executables"
+        ],
+        "required": true,
+        "verified": true,
+        "note": "Observed as esr.exe; ffmpeg ships as DLLs (avcodec/avformat) not ffmpeg.exe."
+      },
+      {
+        "role": "updater",
+        "name": "UpdateMgr_Emp.exe",
+        "relative_paths": [
+          "gui/UpdateMgr_Emp.exe"
+        ],
+        "required": false,
+        "verified": true
+      },
+      {
+        "role": "email_monitor",
+        "name": "EmailMonitorSvc.exe",
+        "relative_paths": [
+          "gui/EmailMonitorSvc.exe"
+        ],
+        "required": false,
+        "verified": true
+      }
+    ],
+    "services": [
+      {
+        "role": "browser_handling",
+        "name": "BrowserHandlingService",
+        "display_name": "Browser Handling Service",
+        "required": true,
+        "verified": true,
+        "expected_state": "RUNNING"
+      }
+    ],
+    "processes": [
+      {
+        "role": "agent",
+        "name": "empmonitor.exe",
+        "required": true,
+        "verified": true
+      },
+      {
+        "role": "service",
+        "name": "emp_psa_service.exe",
+        "required": true,
+        "verified": true
+      },
+      {
+        "role": "recorder",
+        "any_of": [
+          "esr.exe",
+          "ffmpeg.exe"
+        ],
+        "required": false,
+        "verified": true,
+        "note": "Recorder may legitimately be idle when not recording."
+      },
+      {
+        "role": "updater",
+        "name": "UpdateMgr_Emp.exe",
+        "required": false,
+        "verified": true
+      }
+    ],
+    "configuration_files": [
+      {
+        "role": "user_configuration",
+        "name": "empm.ini",
+        "format": "ini",
+        "search": [
+          "data_root"
+        ],
+        "required": true,
+        "verified": true,
+        "authentication_keys": [
+          "auth/email",
+          "auth/crypto_password"
+        ],
+        "secret_keys": [
+          "auth/crypto_password"
+        ],
+        "identifier_keys": [
+          "General/identifier"
+        ],
+        "upload_interval_keys": [
+          "appSettings/dataSendingPeriodSec"
+        ],
+        "screenshot_keys": [
+          "appSettings/screenshotQuality",
+          "appSettings/from_remote\\screenshotPeriodSec"
+        ],
+        "recording_keys": [],
+        "tracking_keys": [],
+        "feature_flag_keys": [
+          "appSettings/from_remote\\ADUserInfoSendPerSec"
+        ]
+      },
+      {
+        "role": "agent_configuration",
+        "name": "config.js",
+        "format": "javascript",
+        "search": [
+          "install_root"
+        ],
+        "relative_paths": [
+          "gui/configs/config.js"
+        ],
+        "required": true,
+        "verified": true,
+        "endpoint_keys": [],
+        "agent_id_keys": [],
+        "organization_keys": [],
+        "version_keys": [],
+        "note": "Observed to contain https and wss endpoint URLs. Endpoint key names not yet parsed."
+      }
+    ],
+    "storage": {
+      "database": {
+        "patterns": [
+          "local_db*.db",
+          "*.db",
+          "*.sqlite",
+          "*.sqlite3"
+        ],
+        "search": [
+          "data_root/*/empm",
+          "data_root/empm",
+          "data_root"
+        ],
+        "required": true,
+        "verified": true,
+        "min_expected_tables": 1
+      },
+      "folders": [
+        {
+          "role": "logs",
+          "candidates": [
+            "empm/logs"
+          ],
+          "search": [
+            "data_root"
+          ],
+          "required": true,
+          "verified": true
+        },
+        {
+          "role": "service_logs",
+          "candidates": [
+            "service"
+          ],
+          "search": [
+            "install_root"
+          ],
+          "required": false,
+          "verified": true
+        },
+        {
+          "role": "failed_screenshots",
+          "candidates": [],
+          "search": [
+            "data_root"
+          ],
+          "required": true,
+          "verified": false,
+          "note": "Name not observed. Folder was absent on the reference machine, which plausibly means no upload has failed -- absence must NOT be reported as a failure until the name is verified."
+        },
+        {
+          "role": "failed_recordings",
+          "candidates": [],
+          "search": [
+            "data_root"
+          ],
+          "required": true,
+          "verified": false,
+          "note": "Name not observed. Same reasoning as failed_screenshots."
+        }
+      ]
+    },
+    "registry_keys": [],
+    "thresholds": {
+      "min_free_disk_mb": 500,
+      "max_clock_drift_seconds": 120,
+      "min_windows_build": null
+    },
+    "network": {
+      "dns_probe_hosts": [
+        "www.microsoft.com"
+      ],
+      "check_internet": true
+    },
+    "collection": {
+      "command_timeout_seconds": 20,
+      "collect_signatures": true,
+      "hash_executables": true
+    },
+    "synchronization": {
+      "_provenance": "Patterns and names below were DISCOVERED by observing a live EmpMonitor 3.7.4 agent on 2026-07-30, not invented. They live in configuration because the brief forbids hardcoding URLs, table names, and log messages, and because log content is product behaviour that can change between versions without notice. A pattern that stops matching must degrade to INCONCLUSIVE, never to a false negative.",
+      "log_sources": [
+        {
+          "role": "agent_log",
+          "search": [
+            "data_root"
+          ],
+          "candidates": [
+            "empm/logs"
+          ],
+          "file_glob": "*.txt",
+          "verified": true
+        },
+        {
+          "role": "service_log",
+          "search": [
+            "install_root"
+          ],
+          "candidates": [
+            "service"
+          ],
+          "file_glob": "EMP_SERVICE*.log",
+          "verified": true
+        }
+      ],
+      "log_line_pattern": "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)\\s+-\\s+(?P<level>\\w+):\\s+(?P<message>.*)$",
+      "log_timestamp_format": "%Y-%m-%dT%H:%M:%SZ",
+      "log_patterns": {
+        "upload_cycle_trigger": {
+          "regex": "Trying to send new session data",
+          "verified": true,
+          "means": "the agent has begun an upload cycle"
+        },
+        "session_enqueued": {
+          "regex": "Adding new session data with id",
+          "verified": true,
+          "means": "a session record was queued for the next cycle"
+        },
+        "api_reply": {
+          "regex": "Requesting for (?P<api>[\\w-]+)\\s+Reply code\\s*:\\s*(?P<code>\\d{3})",
+          "verified": true,
+          "means": "a named API call completed with an HTTP status"
+        },
+        "api_url_reply": {
+          "regex": "Requesting url\\s*:\\s*\"(?P<url>[^\"]+)\"\\s+Reply code\\s*:\\s*(?P<code>\\d{3})",
+          "verified": true,
+          "means": "an API call to a full URL completed with an HTTP status"
+        },
+        "request_dump": {
+          "regex": "(?P<component>\\w+): REQUEST DUMP url=\\s*(?P<url>\\S+)",
+          "verified": true,
+          "means": "an outbound request was issued to this URL"
+        },
+        "upload_succeeded": {
+          "regex": "(?P<component>\\w+): UPLOAD SUCCEEDED",
+          "verified": true,
+          "means": "an individual item was accepted by the server"
+        },
+        "queue_cleanup": {
+          "regex": "Deleting pending registries older than (?P<retention>\\S+)",
+          "verified": true,
+          "means": "the agent ran its pending-record retention sweep"
+        },
+        "queue_cleanup_result": {
+          "regex": ">> Deleted (?P<records>-?\\d+) records",
+          "verified": true,
+          "means": "outcome of the retention sweep"
+        },
+        "auth_register": {
+          "regex": "Allow (?P<endpoint>auth/\\w+) API calling",
+          "verified": true,
+          "means": "the agent permitted an authentication/registration call"
+        },
+        "auth_call": {
+          "regex": "calling the \\w+\\(\\d+\\) from Auth api",
+          "verified": true,
+          "means": "an authentication API call was made"
+        },
+        "alternate_channel_skipped": {
+          "regex": "(?P<reason>username is not valid for SFTP).*skipping whole sending process through (?P<channel>\\w+)",
+          "verified": true,
+          "means": "an alternate upload channel was skipped"
+        },
+        "config_refresh": {
+          "regex": "empm.ini refresh from",
+          "verified": true,
+          "means": "the agent re-read its configuration"
+        },
+        "retry": {
+          "regex": "Retrying to (?P<what>.+)",
+          "verified": true,
+          "means": "the agent retried an operation"
+        },
+        "permission_denied": {
+          "regex": "OpenProcess failed: (?P<reason>.+)",
+          "verified": true,
+          "means": "the agent could not inspect a process"
+        }
+      },
+      "queue": {
+        "pending_table_prefixes": [
+          "pending_"
+        ],
+        "sent_table_prefixes": [
+          "sent_"
+        ],
+        "prefixes_verified": true,
+        "note": "Table NAMES are discovered from the database at runtime; only the prefix convention is configured."
+      },
+      "interval_keys": {
+        "upload_interval": "appSettings/dataSendingPeriodSec",
+        "screenshot_interval": "appSettings/from_remote\\screenshotPeriodSec",
+        "aduser_interval": "appSettings/from_remote\\ADUserInfoSendPerSec"
+      },
+      "thresholds": {
+        "scheduler_drift_tolerance_seconds": 30,
+        "max_queue_depth": 500,
+        "stale_log_tolerance_seconds": 1800,
+        "min_cycles_for_cadence": 2
+      },
+      "network": {
+        "observe_agent_connections": true,
+        "server_ports": [
+          443
+        ],
+        "loopback_ipc_expected": true
+      }
+    }
+  },
+  "evidence": {
+    "strict": true,
+    "sources": [
+      {
+        "id": "EV-001",
+        "name": "config.js",
+        "layer": 1,
+        "reliability": "high",
+        "collector": "framework/validators/configuration.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-002",
+        "name": "empm.ini",
+        "layer": 1,
+        "reliability": "high",
+        "collector": "framework/validators/configuration.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-003",
+        "name": "Local SQLite",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/monitors/sqlite_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-004",
+        "name": "Agent Logs",
+        "layer": 2,
+        "reliability": "medium",
+        "collector": "framework/monitors/log_monitor.py",
+        "implemented": false
+      },
+      {
+        "id": "EV-005",
+        "name": "Windows Service state",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/monitors/runtime_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-006",
+        "name": "Dashboard UI state",
+        "layer": 4,
+        "reliability": "medium",
+        "collector": "framework/validators/dashboard.py",
+        "implemented": false
+      },
+      {
+        "id": "EV-007",
+        "name": "Synchronization activity",
+        "layer": 3,
+        "reliability": "high",
+        "collector": "framework/monitors/sync_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-008",
+        "name": "Dashboard settings (authored)",
+        "layer": 1,
+        "reliability": "medium",
+        "collector": "framework/validators/dashboard.py",
+        "implemented": false
+      },
+      {
+        "id": "EV-009",
+        "name": "Scheduled task state",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/monitors/scheduler_monitor.py",
+        "implemented": false
+      },
+      {
+        "id": "EV-010",
+        "name": "File system artifacts",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/monitors/folder_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-011",
+        "name": "Resource usage (CPU/RAM)",
+        "layer": 2,
+        "reliability": "medium",
+        "collector": "framework/monitors/runtime_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-012",
+        "name": "Operating system information",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/validators/environment.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-013",
+        "name": "Executable file metadata",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/monitors/executable_monitor.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-014",
+        "name": "Network reachability",
+        "layer": 2,
+        "reliability": "medium",
+        "collector": "framework/validators/environment.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-015",
+        "name": "System clock and time zone",
+        "layer": 2,
+        "reliability": "high",
+        "collector": "framework/validators/environment.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-016",
+        "name": "Windows registry",
+        "layer": 1,
+        "reliability": "high",
+        "collector": "framework/validators/configuration.py",
+        "implemented": true
+      },
+      {
+        "id": "EV-017",
+        "name": "Agent network connection state",
+        "layer": 3,
+        "reliability": "medium",
+        "collector": "framework/monitors/sync_monitor.py",
+        "implemented": true
+      }
+    ]
+  }
+}
