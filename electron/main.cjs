@@ -9,6 +9,17 @@ let backendProcess = null;
 autoUpdater.logger = console;
 autoUpdater.autoDownload = true;
 
+function loadURLWithRetry(win, url) {
+  win.loadURL(url).catch((err) => {
+    console.log(`Waiting for backend server at ${url}...`);
+    setTimeout(() => {
+      if (!win.isDestroyed()) {
+        loadURLWithRetry(win, url);
+      }
+    }, 250);
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1366,
@@ -25,13 +36,7 @@ function createWindow() {
     },
   });
 
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  loadURLWithRetry(mainWindow, 'http://localhost:3000');
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -82,7 +87,9 @@ app.whenReady().then(() => {
 
   // Check for updates automatically on startup
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.log('Startup auto-update check error (non-fatal):', err?.message || err);
+    });
   }
 
   app.on('activate', () => {
@@ -136,7 +143,12 @@ ipcMain.handle('check-for-updates', async () => {
   if (!app.isPackaged) {
     return { status: 'dev', message: 'Running in development mode.' };
   }
-  return autoUpdater.checkForUpdates();
+  try {
+    return await autoUpdater.checkForUpdates();
+  } catch (err) {
+    console.error('Update check error:', err?.message || err);
+    return { status: 'error', error: err?.toString(), message: 'No published versions found on GitHub yet.' };
+  }
 });
 
 ipcMain.handle('restart-and-install', () => {

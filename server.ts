@@ -13,7 +13,8 @@ async function startServer() {
   // API to trigger framework test run
   app.post("/api/run", (req, res) => {
     const { plugin, environment, checkOnly } = req.body || {};
-    let cmd = "python3 run.py";
+    const pythonExe = process.platform === "win32" ? "python" : "python3";
+    let cmd = `${pythonExe} run.py`;
     
     if (checkOnly) {
       cmd += " --check";
@@ -112,7 +113,8 @@ async function startServer() {
       return res.status(404).json({ error: `Recording script ${scriptToRun} not found.` });
     }
 
-    const cmd = `python3 recordings/${scriptToRun}`;
+    const pythonExe = process.platform === "win32" ? "python" : "python3";
+    const cmd = `${pythonExe} recordings/${scriptToRun}`;
     exec(cmd, { cwd: process.cwd() }, (error, stdout, stderr) => {
       res.json({
         success: !error || error.code === 0,
