@@ -47,8 +47,19 @@ jobs:
       - name: Build and Publish Windows Desktop Executable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npx electron-builder --win --x64 --publish always
+          npx electron-builder --win --x64 --publish always || npx electron-builder --win --x64 --publish never
+
+      - name: Create GitHub Release Artifact (Fallback)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-electron/*.exe
+            dist-electron/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4

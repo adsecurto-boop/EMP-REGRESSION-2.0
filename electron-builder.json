@@ -43,6 +43,6 @@
     "provider": "github",
     "owner": "adsecurto-boop",
     "repo": "Emp_Regression_suite",
-    "releaseType": "release"
+    "releaseType": "draft"
   }
 }
