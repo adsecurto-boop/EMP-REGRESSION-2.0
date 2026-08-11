@@ -117,6 +117,11 @@ function startBackendServer() {
 }
 
 app.whenReady().then(() => {
+  const { session } = require('electron');
+  if (session && session.defaultSession) {
+    session.defaultSession.setProxy({ proxyBypassRules: '<local>,127.0.0.1,localhost' }).catch(() => {});
+  }
+
   startBackendServer();
   createWindow();
 
