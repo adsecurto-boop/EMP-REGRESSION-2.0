@@ -9,12 +9,21 @@ let backendProcess = null;
 autoUpdater.logger = console;
 autoUpdater.autoDownload = true;
 
-function loadURLWithRetry(win, url) {
+function loadURLWithRetry(win, url, attempts = 0) {
   win.loadURL(url).catch((err) => {
-    console.log(`Waiting for backend server at ${url}...`);
+    console.log(`Waiting for backend server at ${url} (attempt ${attempts + 1})...`);
+    if (attempts > 40 && !win.isDestroyed()) {
+      const fs = require('fs');
+      const localIndexPath = path.join(__dirname, '../dist/index.html');
+      if (fs.existsSync(localIndexPath)) {
+        console.log(`Fallback loading static file: ${localIndexPath}`);
+        win.loadFile(localIndexPath);
+        return;
+      }
+    }
     setTimeout(() => {
       if (!win.isDestroyed()) {
-        loadURLWithRetry(win, url);
+        loadURLWithRetry(win, url, attempts + 1);
       }
     }, 250);
   });
@@ -36,7 +45,7 @@ function createWindow() {
     },
   });
 
-  loadURLWithRetry(mainWindow, 'http://localhost:3000');
+  loadURLWithRetry(mainWindow, 'http://127.0.0.1:3000');
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -50,14 +59,16 @@ function createWindow() {
 
 function startBackendServer() {
   const fs = require('fs');
+  const { spawn } = require('child_process');
   const serverScript = path.join(__dirname, '../dist/server.cjs');
+  const serverTs = path.join(__dirname, '../server.ts');
   
   if (fs.existsSync(serverScript)) {
     try {
       if (utilityProcess) {
         backendProcess = utilityProcess.fork(serverScript, [], {
           cwd: path.join(__dirname, '..'),
-          env: { ...process.env, PORT: '3000', NODE_ENV: app.isPackaged ? 'production' : 'development' },
+          env: { ...process.env, PORT: '3000', NODE_ENV: 'production' },
           stdio: 'pipe'
         });
 
@@ -78,6 +89,26 @@ function startBackendServer() {
       }
     } catch (err) {
       console.error('Failed to start backend server:', err);
+    }
+  } else if (fs.existsSync(serverTs)) {
+    try {
+      console.log('dist/server.cjs not found. Starting server using tsx server.ts...');
+      const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      backendProcess = spawn(npxCmd, ['tsx', 'server.ts'], {
+        cwd: path.join(__dirname, '..'),
+        env: { ...process.env, PORT: '3000', NODE_ENV: 'development' },
+        shell: true,
+        stdio: 'pipe'
+      });
+
+      if (backendProcess.stdout) {
+        backendProcess.stdout.on('data', (data) => console.log(`Backend: ${data.toString()}`));
+      }
+      if (backendProcess.stderr) {
+        backendProcess.stderr.on('data', (data) => console.error(`Backend ERR: ${data.toString()}`));
+      }
+    } catch (err) {
+      console.error('Failed to start server via tsx:', err);
     }
   }
 }
