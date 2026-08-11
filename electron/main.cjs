@@ -2,6 +2,15 @@ const { app, BrowserWindow, ipcMain, shell, utilityProcess } = require('electron
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
+// Handle uncaught exceptions gracefully without throwing fatal UI dialogs
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception in Main Process:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection in Main Process:', reason);
+});
+
 let mainWindow;
 let backendProcess = null;
 

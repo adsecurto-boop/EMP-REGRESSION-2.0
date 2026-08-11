@@ -1,6 +1,7 @@
 {
   "appId": "com.empmonitor.regression.suite",
   "productName": "EmpMonitor Desktop Dashboard Runner",
+  "executableName": "EmpMonitor Desktop Dashboard Runner",
   "copyright": "Copyright © 2026 EmpMonitor",
   "directories": {
     "output": "dist-electron",
@@ -36,7 +37,7 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "EmpMonitor Runner",
+    "shortcutName": "EmpMonitor Desktop Dashboard Runner",
     "deleteAppDataOnUninstall": false
   },
   "publish": {
