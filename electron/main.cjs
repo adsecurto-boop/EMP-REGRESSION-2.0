@@ -59,36 +59,30 @@ function createWindow() {
 
 function startBackendServer() {
   const fs = require('fs');
-  const { spawn } = require('child_process');
+  const { fork, spawn } = require('child_process');
   const serverScript = path.join(__dirname, '../dist/server.cjs');
   const serverTs = path.join(__dirname, '../server.ts');
   
   if (fs.existsSync(serverScript)) {
     try {
-      if (utilityProcess) {
-        backendProcess = utilityProcess.fork(serverScript, [], {
+      console.log(`Initializing backend server from ${serverScript}...`);
+      process.env.PORT = '3000';
+      process.env.NODE_ENV = 'production';
+      
+      // Load bundled standalone Express server directly in Electron main process
+      require(serverScript);
+      console.log('Backend Express server initialized successfully in main process.');
+    } catch (err) {
+      console.error('Failed to require backend server script in main process:', err);
+      try {
+        backendProcess = fork(serverScript, [], {
           cwd: path.join(__dirname, '..'),
           env: { ...process.env, PORT: '3000', NODE_ENV: 'production' },
-          stdio: 'pipe'
+          stdio: 'ignore'
         });
-
-        if (backendProcess.stdout) {
-          backendProcess.stdout.on('data', (data) => console.log(`Backend: ${data.toString()}`));
-        }
-        if (backendProcess.stderr) {
-          backendProcess.stderr.on('data', (data) => console.error(`Backend ERR: ${data.toString()}`));
-        }
-
-        backendProcess.on('error', (err) => {
-          console.error('Backend process error:', err);
-        });
-
-        backendProcess.on('exit', (code) => {
-          console.log(`Backend process exited with code ${code}`);
-        });
+      } catch (forkErr) {
+        console.error('Failed to fork backend process:', forkErr);
       }
-    } catch (err) {
-      console.error('Failed to start backend server:', err);
     }
   } else if (fs.existsSync(serverTs)) {
     try {

@@ -23,6 +23,8 @@ interface UpdaterInfo {
   error?: string;
 }
 
+const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
+
 export default function App() {
   const [features, setFeatures] = useState<FeatureProfile[]>([]);
   const [desktopStatus, setDesktopStatus] = useState<DesktopStatus | null>(null);
@@ -50,12 +52,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report'>('desktop');
 
   useEffect(() => {
-    fetch('/api/features')
+    fetch(`${API_BASE}/api/features`)
       .then((res) => res.json())
       .then((data) => setFeatures(data))
       .catch((err) => console.error(err));
 
-    fetch('/api/desktop/status')
+    fetch(`${API_BASE}/api/desktop/status`)
       .then((res) => res.json())
       .then((data) => setDesktopStatus(data))
       .catch((err) => console.error(err));
@@ -78,7 +80,7 @@ export default function App() {
     setIsRunning(true);
     setRunResult(null);
 
-    fetch('/api/run', {
+    fetch(`${API_BASE}/api/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -103,7 +105,7 @@ export default function App() {
     setIsChromeRunning(true);
     setChromeOutput(null);
 
-    fetch('/api/chrome/launch-check', {
+    fetch(`${API_BASE}/api/chrome/launch-check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recordingScript: selectedScript })

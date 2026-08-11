@@ -5,7 +5,7 @@ import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
 
-// Safe directory determination supporting ESM and bundled CJS
+// Safe directory determination supporting ESM, bundled CJS, and Electron app.asar
 let currentDir = process.cwd();
 try {
   if (typeof __dirname !== "undefined") {
@@ -17,15 +17,30 @@ try {
   // fallback
 }
 
-const ROOT_DIR = (currentDir.endsWith("dist") || currentDir.endsWith("dist" + path.sep))
+let ROOT_DIR = (currentDir.endsWith("dist") || currentDir.endsWith("dist" + path.sep))
   ? path.resolve(currentDir, "..")
-  : process.cwd();
+  : currentDir;
+
+if (!fs.existsSync(path.join(ROOT_DIR, "config")) && fs.existsSync(path.join(process.cwd(), "config"))) {
+  ROOT_DIR = process.cwd();
+}
 
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
+
+  // CORS middleware for Electron desktop app and local requests
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
   // API to trigger framework test run
   app.post("/api/run", (req, res) => {
@@ -157,8 +172,16 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  const server = app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on http://127.0.0.1:${PORT}`);
+  });
+
+  server.on("error", (err: any) => {
+    if (err && err.code === "EADDRINUSE") {
+      console.log(`Port ${PORT} is already in use. Reusing existing server instance.`);
+    } else {
+      console.error("Express server error:", err);
+    }
   });
 }
 
