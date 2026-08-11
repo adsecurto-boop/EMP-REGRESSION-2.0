@@ -150,44 +150,89 @@ app.on('window-all-closed', () => {
 
 // Auto-Updater Events
 autoUpdater.on('checking-for-update', () => {
-  mainWindow?.webContents.send('updater-status', { status: 'checking', message: 'Checking for updates...' });
+  console.log('Auto-updater: checking for update...');
+  mainWindow?.webContents.send('updater-status', {
+    status: 'checking',
+    working: true,
+    message: 'Connecting to GitHub Releases feed... Checking for updates.'
+  });
 });
 
 autoUpdater.on('update-available', (info) => {
-  mainWindow?.webContents.send('updater-status', { status: 'available', info, message: `Update v${info.version} available. Downloading...` });
+  console.log('Auto-updater: update available', info?.version);
+  mainWindow?.webContents.send('updater-status', {
+    status: 'available',
+    working: true,
+    info,
+    message: `YES - Auto-Updater is Working! New release v${info.version} found on GitHub. Downloading...`
+  });
 });
 
 autoUpdater.on('update-not-available', (info) => {
-  mainWindow?.webContents.send('updater-status', { status: 'not-available', info, message: 'App is up to date.' });
+  console.log('Auto-updater: up to date', info?.version);
+  mainWindow?.webContents.send('updater-status', {
+    status: 'not-available',
+    working: true,
+    info,
+    message: `YES - Auto-Updater is Working! You are on the latest version (v${info?.version || '0.1.0'}).`
+  });
 });
 
 autoUpdater.on('error', (err) => {
-  mainWindow?.webContents.send('updater-status', { status: 'error', error: err.toString(), message: 'Error checking updates.' });
+  const errMsg = err?.message || err?.toString() || 'Unknown updater error';
+  console.error('Auto-updater error:', errMsg);
+  mainWindow?.webContents.send('updater-status', {
+    status: 'error',
+    working: false,
+    error: errMsg,
+    message: `Auto-Update Error: ${errMsg.includes('404') ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
+  });
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
   mainWindow?.webContents.send('updater-status', {
     status: 'downloading',
+    working: true,
     progress: progressObj.percent,
     bytesPerSecond: progressObj.bytesPerSecond,
-    message: `Downloading update: ${Math.round(progressObj.percent)}%`
+    message: `Downloading update from GitHub: ${Math.round(progressObj.percent)}%`
   });
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  mainWindow?.webContents.send('updater-status', { status: 'downloaded', info, message: 'Update downloaded. Ready to install.' });
+  mainWindow?.webContents.send('updater-status', {
+    status: 'downloaded',
+    working: true,
+    info,
+    message: `YES - Update v${info.version} downloaded successfully! Ready to restart and install.`
+  });
 });
 
 // IPC handlers
 ipcMain.handle('check-for-updates', async () => {
   if (!app.isPackaged) {
-    return { status: 'dev', message: 'Running in development mode.' };
+    const devInfo = {
+      status: 'dev',
+      working: true,
+      message: 'Running in development mode (app.isPackaged = false). Auto-updater triggers automatically in built .exe.'
+    };
+    mainWindow?.webContents.send('updater-status', devInfo);
+    return devInfo;
   }
   try {
-    return await autoUpdater.checkForUpdates();
+    const result = await autoUpdater.checkForUpdates();
+    return { status: 'checking', working: true, message: 'Check initiated with GitHub Releases.', result };
   } catch (err) {
-    console.error('Update check error:', err?.message || err);
-    return { status: 'error', error: err?.toString(), message: 'No published versions found on GitHub yet.' };
+    const errMsg = err?.message || err?.toString() || 'Error checking updates';
+    console.error('Update check exception:', errMsg);
+    const errPayload = {
+      status: 'error',
+      working: false,
+      error: errMsg,
+      message: `Auto-Update Error: ${errMsg.includes('404') ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
+    };
+    mainWindow?.webContents.send('updater-status', errPayload);
+    return errPayload;
   }
 });
 
