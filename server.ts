@@ -24,7 +24,29 @@ if (!fs.existsSync(path.join(ROOT_DIR, "config")) && fs.existsSync(path.join(pro
   ROOT_DIR = process.cwd();
 }
 
-const LOG_FILE_PATH = path.join(ROOT_DIR, "log.txt");
+import os from "os";
+
+const USER_DATA_DIR = path.join(os.homedir(), ".empmonitor");
+if (!fs.existsSync(USER_DATA_DIR)) {
+  try {
+    fs.mkdirSync(USER_DATA_DIR, { recursive: true });
+  } catch (e) {
+    // Ignore error
+  }
+}
+
+function getLogFilePath(): string {
+  const rootLog = path.join(ROOT_DIR, "log.txt");
+  try {
+    // Test write permission to ROOT_DIR
+    fs.accessSync(ROOT_DIR, fs.constants.W_OK);
+    return rootLog;
+  } catch {
+    return path.join(USER_DATA_DIR, "log.txt");
+  }
+}
+
+const LOG_FILE_PATH = getLogFilePath();
 
 function writeLogEntry(level: "INFO" | "SUCCESS" | "WARN" | "ERROR", category: string, message: string, details?: any) {
   const timestamp = new Date().toISOString();
@@ -45,7 +67,10 @@ function writeLogEntry(level: "INFO" | "SUCCESS" | "WARN" | "ERROR", category: s
   try {
     fs.appendFileSync(LOG_FILE_PATH, logLine, "utf-8");
   } catch (e) {
-    console.error("Failed to write to log.txt:", e);
+    try {
+      const fallbackLog = path.join(USER_DATA_DIR, "log.txt");
+      fs.appendFileSync(fallbackLog, logLine, "utf-8");
+    } catch {}
   }
 }
 
@@ -239,15 +264,30 @@ async function startServer() {
 
       let reportData = null;
       try {
-        const reportsDir = path.join(execDir, "reports");
-        if (fs.existsSync(reportsDir)) {
-          const subdirs = fs.readdirSync(reportsDir).sort().reverse();
-          if (subdirs.length > 0) {
-            const latestReportPath = path.join(reportsDir, subdirs[0], "report.json");
-            if (fs.existsSync(latestReportPath)) {
-              reportData = JSON.parse(fs.readFileSync(latestReportPath, "utf-8"));
+        const candidateDirs = [
+          path.join(execDir, "reports"),
+          path.join(USER_DATA_DIR, "reports")
+        ];
+
+        let latestFile: { path: string; mtime: number } | null = null;
+
+        for (const reportsDir of candidateDirs) {
+          if (fs.existsSync(reportsDir)) {
+            const subdirs = fs.readdirSync(reportsDir);
+            for (const sub of subdirs) {
+              const latestReportPath = path.join(reportsDir, sub, "report.json");
+              if (fs.existsSync(latestReportPath)) {
+                const stat = fs.statSync(latestReportPath);
+                if (!latestFile || stat.mtimeMs > latestFile.mtime) {
+                  latestFile = { path: latestReportPath, mtime: stat.mtimeMs };
+                }
+              }
             }
           }
+        }
+
+        if (latestFile) {
+          reportData = JSON.parse(fs.readFileSync(latestFile.path, "utf-8"));
         }
       } catch (e) {
         console.error("Error reading report JSON:", e);

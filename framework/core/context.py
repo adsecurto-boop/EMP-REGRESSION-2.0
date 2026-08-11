@@ -235,7 +235,13 @@ class RuntimeContext:
         )
         stamp = datetime_utils.format_timestamp_for_filename(self.started_at)
         resolved = base / f"{stamp}_{self.execution_id[:8]}"
-        self.output_root = filesystem.ensure_directory(resolved)
+        try:
+            self.output_root = filesystem.ensure_directory(resolved)
+        except FrameworkError:
+            # Fallback for installed location (e.g., C:\Program Files) where standard user lacks write permissions
+            fallback_base = Path.home() / ".empmonitor" / REPORTS_DIR_NAME
+            resolved = fallback_base / f"{stamp}_{self.execution_id[:8]}"
+            self.output_root = filesystem.ensure_directory(resolved)
         _LOGGER.debug("Run output root resolved to %s", self.output_root)
         return self.output_root
 
