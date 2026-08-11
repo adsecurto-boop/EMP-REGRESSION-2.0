@@ -49,14 +49,15 @@ function createWindow() {
 }
 
 function startBackendServer() {
-  // Start server if packaged
-  if (app.isPackaged) {
-    const serverScript = path.join(__dirname, '../dist/server.cjs');
+  const fs = require('fs');
+  const serverScript = path.join(__dirname, '../dist/server.cjs');
+  
+  if (fs.existsSync(serverScript)) {
     try {
       if (utilityProcess) {
         backendProcess = utilityProcess.fork(serverScript, [], {
           cwd: path.join(__dirname, '..'),
-          env: { ...process.env, PORT: '3000', NODE_ENV: 'production' },
+          env: { ...process.env, PORT: '3000', NODE_ENV: app.isPackaged ? 'production' : 'development' },
           stdio: 'pipe'
         });
 
