@@ -16,6 +16,13 @@
     "recordings/**/*",
     "run.py"
   ],
+  "asarUnpack": [
+    "config/**/*",
+    "framework/**/*",
+    "plugins/**/*",
+    "recordings/**/*",
+    "run.py"
+  ],
   "extraMetadata": {
     "main": "electron/main.cjs"
   },
