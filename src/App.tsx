@@ -35,6 +35,8 @@ export default function App() {
   const [isChromeRunning, setIsChromeRunning] = useState<boolean>(false);
   const [chromeOutput, setChromeOutput] = useState<{ stdout: string; stderr: string; success?: boolean } | null>(null);
 
+  const [isBackendReady, setIsBackendReady] = useState<boolean | null>(null);
+
   const [updaterState, setUpdaterState] = useState<UpdaterInfo>({
     status: 'idle',
     message: 'Ready to check for GitHub updates'
@@ -51,16 +53,53 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report'>('desktop');
 
+  // Check backend server availability on mount
+  useEffect(() => {
+    const checkBackendReachability = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/desktop/status`);
+        if (res.ok) {
+          setIsBackendReady(true);
+        } else {
+          setIsBackendReady(false);
+        }
+      } catch (err) {
+        console.warn(`Backend connection refused at ${API_BASE || 'origin'}:`, err);
+        setIsBackendReady(false);
+      }
+    };
+
+    checkBackendReachability();
+  }, []);
+
   useEffect(() => {
     fetch(`${API_BASE}/api/features`)
-      .then((res) => res.json())
-      .then((data) => setFeatures(data))
-      .catch((err) => console.error(err));
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response failed');
+        return res.json();
+      })
+      .then((data) => {
+        setFeatures(data);
+        setIsBackendReady(true);
+      })
+      .catch((err) => {
+        console.error('Error fetching features:', err);
+        setIsBackendReady(false);
+      });
 
     fetch(`${API_BASE}/api/desktop/status`)
-      .then((res) => res.json())
-      .then((data) => setDesktopStatus(data))
-      .catch((err) => console.error(err));
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response failed');
+        return res.json();
+      })
+      .then((data) => {
+        setDesktopStatus(data);
+        setIsBackendReady(true);
+      })
+      .catch((err) => {
+        console.error('Error fetching status:', err);
+        setIsBackendReady(false);
+      });
 
     // Listen to Electron IPC auto updater events if running inside Electron desktop app
     if ((window as any).electronAPI) {
@@ -190,6 +229,36 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Connection Refused / Unreachable Backend Warning Banner */}
+      {isBackendReady === false && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between text-amber-300 text-xs z-40 shrink-0">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Backend Connection Refused:</strong> Unable to reach server at{' '}
+              <code className="bg-amber-500/20 px-1.5 py-0.5 rounded font-mono text-amber-200">
+                {API_BASE || 'http://127.0.0.1:3000'}
+              </code>. Please check if the local Express service is running.
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setIsBackendReady(null);
+              fetch(`${API_BASE}/api/desktop/status`)
+                .then((res) => {
+                  if (res.ok) setIsBackendReady(true);
+                  else setIsBackendReady(false);
+                })
+                .catch(() => setIsBackendReady(false));
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-lg text-xs font-medium transition"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      )}
 
       {/* Main Layout */}
       <div className="flex-1 flex overflow-hidden">
