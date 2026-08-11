@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Play, CheckCircle2, AlertTriangle, XCircle, ShieldAlert, Layers, RefreshCw, FileText,
   Server, Activity, ChevronRight, Monitor, Globe, Download, Github, Cpu, Radio, Sparkles,
-  Bell, X, Info, ExternalLink, Check
+  Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal
 } from 'lucide-react';
 import { FeatureProfile } from './types';
 
@@ -65,7 +65,108 @@ export default function App() {
     report: any;
   } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report'>('desktop');
+  const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report' | 'logs'>('desktop');
+  const [logs, setLogs] = useState<string>('');
+  const [logsLoading, setLogsLoading] = useState<boolean>(false);
+
+  const handleFetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      if ((window as any).electronAPI?.getLogs) {
+        const res = await (window as any).electronAPI.getLogs();
+        if (res?.success) {
+          setLogs(res.content);
+          setLogsLoading(false);
+          return;
+        }
+      }
+      const res = await fetch(`${API_BASE}/api/logs`);
+      const data = await res.json();
+      if (data.success) {
+        setLogs(data.content);
+      }
+    } catch (err) {
+      console.error('Error fetching logs:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleDownloadLogs = async () => {
+    try {
+      if ((window as any).electronAPI?.downloadLogs) {
+        const res = await (window as any).electronAPI.downloadLogs();
+        if (res?.success) {
+          setToast({
+            id: Date.now().toString(),
+            title: 'log.txt Saved Successfully',
+            message: `Log report saved to: ${res.filePath || 'selected folder'}`,
+            type: 'success',
+            working: true,
+            timestamp: new Date().toLocaleTimeString(),
+          });
+          return;
+        }
+        if (res?.cancelled) return;
+      }
+
+      // Fallback direct browser file download
+      const link = document.createElement('a');
+      link.href = `${API_BASE}/api/logs/download`;
+      link.setAttribute('download', 'log.txt');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setToast({
+        id: Date.now().toString(),
+        title: 'Downloading log.txt',
+        message: 'Application log report download initiated.',
+        type: 'success',
+        working: true,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+    } catch (err) {
+      console.error('Download error:', err);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    try {
+      await fetch(`${API_BASE}/api/logs/clear`, { method: 'POST' });
+      handleFetchLogs();
+      setToast({
+        id: Date.now().toString(),
+        title: 'Logs Cleared',
+        message: 'System log file reinitialized.',
+        type: 'info',
+        working: true,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+    } catch (err) {
+      console.error('Error clearing logs:', err);
+    }
+  };
+
+  const handleCopyLogs = () => {
+    if (logs) {
+      navigator.clipboard.writeText(logs);
+      setToast({
+        id: Date.now().toString(),
+        title: 'Logs Copied to Clipboard',
+        message: 'Complete log text copied. Ready to paste or share.',
+        type: 'success',
+        working: true,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      handleFetchLogs();
+    }
+  }, [activeTab]);
 
   // Check backend server availability on mount
   useEffect(() => {
@@ -286,6 +387,15 @@ export default function App() {
               <option value="local">local (EmpMonitor runtime)</option>
             </select>
           </div>
+
+          <button
+            onClick={handleDownloadLogs}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+            title="Download complete log.txt report file"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download log.txt</span>
+          </button>
 
           <button
             onClick={() => handleRun(true)}
@@ -522,6 +632,17 @@ export default function App() {
             >
               <FileText className="w-4 h-4" />
               <span>Structured Report</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition ${
+                activeTab === 'logs'
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Terminal className="w-4 h-4 text-emerald-400" />
+              <span className="text-emerald-400 font-bold">System Logs (log.txt)</span>
             </button>
           </div>
 
@@ -870,6 +991,68 @@ export default function App() {
                     No structured report available for this run. Run a full suite to view detailed findings.
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'logs' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 p-5 rounded-xl border border-slate-800 backdrop-blur">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <Terminal className="w-5 h-5 text-emerald-400" />
+                      <h3 className="font-bold text-white text-base">System Runtime Log File (log.txt)</h3>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold">
+                        Live Recorder Active
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Records all success operations, errors, suite runs, and auto-updater events. Click <strong>Download log.txt</strong> to export and share with developers.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <button
+                      onClick={handleFetchLogs}
+                      disabled={logsLoading}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
+                    <button
+                      onClick={handleCopyLogs}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </button>
+                    <button
+                      onClick={handleClearLogs}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-medium transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadLogs}
+                      className="flex items-center space-x-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download log.txt</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed shadow-inner">
+                  {logs ? (
+                    <pre className="text-slate-300 whitespace-pre-wrap">{logs}</pre>
+                  ) : (
+                    <div className="text-slate-500 text-center py-16">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" />
+                      Loading log report entries...
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

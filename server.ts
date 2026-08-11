@@ -24,6 +24,41 @@ if (!fs.existsSync(path.join(ROOT_DIR, "config")) && fs.existsSync(path.join(pro
   ROOT_DIR = process.cwd();
 }
 
+const LOG_FILE_PATH = path.join(ROOT_DIR, "log.txt");
+
+function writeLogEntry(level: "INFO" | "SUCCESS" | "WARN" | "ERROR", category: string, message: string, details?: any) {
+  const timestamp = new Date().toISOString();
+  let logLine = `[${timestamp}] [${level}] [${category}] ${message}`;
+  if (details) {
+    if (typeof details === "object") {
+      try {
+        logLine += ` | Details: ${JSON.stringify(details)}`;
+      } catch {
+        logLine += ` | Details: ${String(details)}`;
+      }
+    } else {
+      logLine += ` | Details: ${details}`;
+    }
+  }
+  logLine += "\n";
+
+  try {
+    fs.appendFileSync(LOG_FILE_PATH, logLine, "utf-8");
+  } catch (e) {
+    console.error("Failed to write to log.txt:", e);
+  }
+}
+
+// Initialize log file if absent
+if (!fs.existsSync(LOG_FILE_PATH)) {
+  const initialHeader = `================================================================================\nEmpMonitor Desktop Suite - System Runtime Log (log.txt)\nInitialized At: ${new Date().toISOString()}\nPlatform: ${process.platform} (${process.arch})\n================================================================================\n`;
+  try {
+    fs.writeFileSync(LOG_FILE_PATH, initialHeader, "utf-8");
+  } catch (e) {
+    console.error("Failed to write log header:", e);
+  }
+}
+
 function getUnpackedPath(targetPath: string): string {
   if (targetPath.includes("app.asar") && !targetPath.includes("app.asar.unpacked")) {
     const unpacked = targetPath.replace("app.asar", "app.asar.unpacked");
@@ -172,9 +207,12 @@ async function startServer() {
     const execDir = getUnpackedPath(ROOT_DIR);
     const pythonExe = findPythonExecutable();
 
+    writeLogEntry("INFO", "RUN_SUITE", `Triggered suite execution. Target plugin: ${plugin || "ALL"}, Environment: ${environment || "local"}, CheckOnly: ${!!checkOnly}`);
+
     if (!pythonExe) {
-      // Python runtime missing on host VM — execute integrated Node fallback runner
+      writeLogEntry("WARN", "RUN_SUITE", "Python runtime missing in host PATH. Executing Node.js integrated validation engine.");
       const fallbackResult = runNodeFallbackReport(execDir, plugin, environment, checkOnly);
+      writeLogEntry("SUCCESS", "RUN_SUITE", "Node.js integrated validation suite completed successfully.", { exitCode: 0, totalPluginsVerified: fallbackResult.report?.summary?.total_plugins });
       return res.json(fallbackResult);
     }
 
@@ -194,7 +232,7 @@ async function startServer() {
 
     exec(cmd, { cwd: execDir }, (error, stdout, stderr) => {
       if (error && (error.code === "ENOENT" || (typeof error.message === "string" && error.message.includes("ENOENT")))) {
-        // Fallback if execution failed due to missing binary
+        writeLogEntry("WARN", "RUN_SUITE", "Python spawn returned ENOENT. Executing fallback Node.js suite runner.");
         const fallbackResult = runNodeFallbackReport(execDir, plugin, environment, checkOnly);
         return res.json(fallbackResult);
       }
@@ -215,8 +253,16 @@ async function startServer() {
         console.error("Error reading report JSON:", e);
       }
 
+      const isSuccess = !error || error.code === 0;
+      writeLogEntry(
+        isSuccess ? "SUCCESS" : "ERROR",
+        "RUN_SUITE",
+        `Execution finished with exit code ${error ? (typeof error.code === "number" ? error.code : 1) : 0}`,
+        { success: isSuccess, stderrSummary: stderr ? stderr.slice(0, 150) : "None" }
+      );
+
       res.json({
-        success: !error || error.code === 0,
+        success: isSuccess,
         exitCode: error ? (typeof error.code === "number" ? error.code : 1) : 0,
         stdout,
         stderr: stderr || (error ? error.message : ""),
@@ -281,12 +327,16 @@ async function startServer() {
     const execDir = getUnpackedPath(ROOT_DIR);
     const scriptPath = path.join(execDir, "recordings", scriptToRun);
 
+    writeLogEntry("INFO", "CHROME_INSPECTOR", `Triggered Chrome Inspector script: ${scriptToRun}`);
+
     if (!fs.existsSync(scriptPath)) {
+      writeLogEntry("ERROR", "CHROME_INSPECTOR", `Script file not found: ${scriptToRun}`);
       return res.status(404).json({ error: `Recording script ${scriptToRun} not found.` });
     }
 
     const pythonExe = findPythonExecutable();
     if (!pythonExe) {
+      writeLogEntry("WARN", "CHROME_INSPECTOR", `Python not in PATH. Returned inspection summary for ${scriptToRun}`);
       return res.json({
         success: true,
         scriptExecuted: scriptToRun,
@@ -297,13 +347,78 @@ async function startServer() {
 
     const cmd = `${pythonExe} "${scriptPath}"`;
     exec(cmd, { cwd: execDir }, (error, stdout, stderr) => {
+      const isSuccess = !error || error.code === 0;
+      writeLogEntry(isSuccess ? "SUCCESS" : "ERROR", "CHROME_INSPECTOR", `Executed ${scriptToRun} with exit code ${error ? error.code : 0}`);
       res.json({
-        success: !error || error.code === 0,
+        success: isSuccess,
         scriptExecuted: scriptToRun,
         stdout,
         stderr: stderr || (error ? error.message : "")
       });
     });
+  });
+
+  // API to fetch log text
+  app.get("/api/logs", (req, res) => {
+    try {
+      if (fs.existsSync(LOG_FILE_PATH)) {
+        const content = fs.readFileSync(LOG_FILE_PATH, "utf-8");
+        const stats = fs.statSync(LOG_FILE_PATH);
+        const linesCount = content.split("\n").length;
+        return res.json({
+          success: true,
+          content,
+          linesCount,
+          sizeBytes: stats.size,
+          path: LOG_FILE_PATH
+        });
+      }
+      return res.json({
+        success: true,
+        content: `[LOG FILE INITIALIZING] ${new Date().toISOString()}`,
+        linesCount: 1,
+        sizeBytes: 0,
+        path: LOG_FILE_PATH
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  // API to direct download log.txt file
+  app.get("/api/logs/download", (req, res) => {
+    try {
+      if (fs.existsSync(LOG_FILE_PATH)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Content-Disposition", 'attachment; filename="log.txt"');
+        return fs.createReadStream(LOG_FILE_PATH).pipe(res);
+      }
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="log.txt"');
+      return res.send(`[EmpMonitor Runtime Log]\nFile created: ${new Date().toISOString()}\nNo log entries recorded yet.\n`);
+    } catch (err: any) {
+      return res.status(500).send(`Error downloading log file: ${err?.message || err}`);
+    }
+  });
+
+  // API to append frontend/app event log entry
+  app.post("/api/logs/append", (req, res) => {
+    const { level, category, message, details } = req.body || {};
+    const validLevel = (["INFO", "SUCCESS", "WARN", "ERROR"].includes(level) ? level : "INFO") as "INFO" | "SUCCESS" | "WARN" | "ERROR";
+    writeLogEntry(validLevel, category || "CLIENT", message || "Client event logged", details);
+    return res.json({ success: true });
+  });
+
+  // API to clear log file
+  app.post("/api/logs/clear", (req, res) => {
+    try {
+      const header = `================================================================================\nEmpMonitor Desktop Suite - System Runtime Log (log.txt)\nCleared & Reinitialized At: ${new Date().toISOString()}\n================================================================================\n`;
+      fs.writeFileSync(LOG_FILE_PATH, header, "utf-8");
+      writeLogEntry("INFO", "SYSTEM", "Log file was cleared by user.");
+      return res.json({ success: true, message: "Log file cleared successfully." });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
   });
 
   // Vite middleware for development

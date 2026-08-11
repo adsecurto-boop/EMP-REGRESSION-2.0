@@ -149,8 +149,28 @@ app.on('window-all-closed', () => {
 });
 
 // Auto-Updater Events
+function logToFile(level, category, message, details) {
+  try {
+    const fs = require('fs');
+    const rootLog = path.join(__dirname, '../log.txt');
+    const timestamp = new Date().toISOString();
+    let line = `[${timestamp}] [${level}] [${category}] ${message}`;
+    if (details) {
+      line += ` | Details: ${typeof details === 'object' ? JSON.stringify(details) : details}`;
+    }
+    line += '\n';
+
+    [rootLog].forEach((p) => {
+      try {
+        fs.appendFileSync(p, line, 'utf-8');
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
 autoUpdater.on('checking-for-update', () => {
   console.log('Auto-updater: checking for update...');
+  logToFile('INFO', 'AUTO_UPDATER', 'Checking for updates via GitHub Releases feed...');
   mainWindow?.webContents.send('updater-status', {
     status: 'checking',
     working: true,
@@ -160,6 +180,7 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('Auto-updater: update available', info?.version);
+  logToFile('SUCCESS', 'AUTO_UPDATER', `Update available: v${info?.version}`, info);
   mainWindow?.webContents.send('updater-status', {
     status: 'available',
     working: true,
@@ -170,6 +191,7 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', (info) => {
   console.log('Auto-updater: up to date', info?.version);
+  logToFile('SUCCESS', 'AUTO_UPDATER', `Application up to date (v${info?.version || '0.1.0'})`);
   mainWindow?.webContents.send('updater-status', {
     status: 'not-available',
     working: true,
@@ -181,6 +203,7 @@ autoUpdater.on('update-not-available', (info) => {
 autoUpdater.on('error', (err) => {
   const errMsg = err?.message || err?.toString() || 'Unknown updater error';
   console.error('Auto-updater error:', errMsg);
+  logToFile('ERROR', 'AUTO_UPDATER', `Auto-update error: ${errMsg}`);
   mainWindow?.webContents.send('updater-status', {
     status: 'error',
     working: false,
@@ -190,6 +213,7 @@ autoUpdater.on('error', (err) => {
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
+  logToFile('INFO', 'AUTO_UPDATER', `Download progress: ${Math.round(progressObj.percent)}%`);
   mainWindow?.webContents.send('updater-status', {
     status: 'downloading',
     working: true,
@@ -200,6 +224,7 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
+  logToFile('SUCCESS', 'AUTO_UPDATER', `Update downloaded successfully: v${info?.version}`);
   mainWindow?.webContents.send('updater-status', {
     status: 'downloaded',
     working: true,
@@ -210,6 +235,7 @@ autoUpdater.on('update-downloaded', (info) => {
 
 // IPC handlers
 ipcMain.handle('check-for-updates', async () => {
+  logToFile('INFO', 'AUTO_UPDATER', 'User manually clicked Check For Updates');
   if (!app.isPackaged) {
     const devInfo = {
       status: 'dev',
@@ -225,6 +251,7 @@ ipcMain.handle('check-for-updates', async () => {
   } catch (err) {
     const errMsg = err?.message || err?.toString() || 'Error checking updates';
     console.error('Update check exception:', errMsg);
+    logToFile('ERROR', 'AUTO_UPDATER', `Check exception: ${errMsg}`);
     const errPayload = {
       status: 'error',
       working: false,
@@ -237,9 +264,53 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('restart-and-install', () => {
+  logToFile('INFO', 'AUTO_UPDATER', 'Triggered quitAndInstall');
   autoUpdater.quitAndInstall();
 });
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+ipcMain.handle('get-logs', () => {
+  try {
+    const fs = require('fs');
+    const rootLog = path.join(__dirname, '../log.txt');
+    let content = '';
+    if (fs.existsSync(rootLog)) {
+      content = fs.readFileSync(rootLog, 'utf-8');
+    } else {
+      content = `[EmpMonitor Log Initializing] ${new Date().toISOString()}\n`;
+    }
+    return { success: true, content };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err) };
+  }
+});
+
+ipcMain.handle('download-logs', async () => {
+  const { dialog } = require('electron');
+  const fs = require('fs');
+  try {
+    const rootLog = path.join(__dirname, '../log.txt');
+
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Application Log Report',
+      defaultPath: 'log.txt',
+      filters: [{ name: 'Text Documents (*.txt)', extensions: ['txt'] }]
+    });
+
+    if (filePath) {
+      if (fs.existsSync(rootLog)) {
+        fs.copyFileSync(rootLog, filePath);
+      } else {
+        fs.writeFileSync(filePath, `[EmpMonitor System Log]\nCreated: ${new Date().toISOString()}\nNo events recorded yet.\n`, 'utf-8');
+      }
+      logToFile('INFO', 'SYSTEM', `Exported log.txt file to user location: ${filePath}`);
+      return { success: true, filePath };
+    }
+    return { success: false, cancelled: true };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err) };
+  }
 });
