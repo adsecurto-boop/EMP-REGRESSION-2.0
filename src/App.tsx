@@ -57,7 +57,7 @@ export default function App() {
 
   const [toast, setToast] = useState<ToastNotification | null>(null);
 
-  const [appVersion, setAppVersion] = useState<string>('0.1.1');
+  const [appVersion, setAppVersion] = useState<string>('0.1.2');
 
   const [runResult, setRunResult] = useState<{
     stdout: string;
