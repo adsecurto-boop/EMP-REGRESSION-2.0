@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Play, CheckCircle2, AlertTriangle, XCircle, ShieldAlert, Layers, RefreshCw, FileText,
   Server, Activity, ChevronRight, Monitor, Globe, Download, Github, Cpu, Radio, Sparkles,
-  Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal
+  Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal, Filter, Search, ArrowUpCircle
 } from 'lucide-react';
 import { FeatureProfile } from './types';
 
@@ -23,6 +23,7 @@ interface UpdaterInfo {
   progress?: number;
   info?: any;
   error?: string;
+  diagnosticHint?: string;
 }
 
 interface ToastNotification {
@@ -68,6 +69,53 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report' | 'logs'>('desktop');
   const [logs, setLogs] = useState<string>('');
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
+
+  const [logFilterCategory, setLogFilterCategory] = useState<'ALL' | 'AUTO_UPDATE' | 'RUN_SUITE' | 'CHROME_INSPECTOR' | 'SYSTEM'>('ALL');
+  const [logSearchTerm, setLogSearchTerm] = useState<string>('');
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState<boolean>(false);
+
+  const handleTriggerUpdateCheck = async () => {
+    setIsCheckingUpdates(true);
+    try {
+      if ((window as any).electronAPI?.checkForUpdates) {
+        const res = await (window as any).electronAPI.checkForUpdates();
+        setToast({
+          id: Date.now().toString(),
+          title: 'Auto-Update Check Initiated',
+          message: res?.message || 'Contacting GitHub Releases feed...',
+          type: 'info',
+          working: true,
+          timestamp: new Date().toLocaleTimeString(),
+        });
+      } else {
+        await fetch(`${API_BASE}/api/logs/append`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            level: 'INFO',
+            category: 'AUTO_UPDATE',
+            message: 'Manual auto-update check initiated via Web Inspector Dashboard',
+            details: { appVersion, environment: 'Web Preview Engine' }
+          })
+        });
+        setToast({
+          id: Date.now().toString(),
+          title: 'Auto-Update Diagnostic Logged',
+          message: 'Recorded manual auto-update check to log.txt',
+          type: 'info',
+          working: true,
+          timestamp: new Date().toLocaleTimeString(),
+        });
+      }
+      setTimeout(() => {
+        handleFetchLogs();
+      }, 800);
+    } catch (err) {
+      console.error('Update check error:', err);
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
 
   const handleFetchLogs = async () => {
     setLogsLoading(true);
@@ -995,67 +1043,346 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'logs' && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 p-5 rounded-xl border border-slate-800 backdrop-blur">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <Terminal className="w-5 h-5 text-emerald-400" />
-                      <h3 className="font-bold text-white text-base">System Runtime Log File (log.txt)</h3>
-                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold">
-                        Live Recorder Active
+            {activeTab === 'logs' && (() => {
+              const rawLines = logs ? logs.split('\n') : [];
+              const parsed = rawLines.map((line, idx) => {
+                const match = line.match(/^\[(.*?)\]\s*\[(.*?)\]\s*\[(.*?)\]\s*(.*)$/);
+                if (match) {
+                  return {
+                    id: idx,
+                    timestamp: match[1],
+                    level: match[2],
+                    category: match[3],
+                    message: match[4],
+                    raw: line,
+                  };
+                }
+                return {
+                  id: idx,
+                  timestamp: '',
+                  level: 'INFO',
+                  category: 'SYSTEM',
+                  message: line,
+                  raw: line,
+                };
+              });
+
+              const autoUpdateTotal = parsed.filter(l => l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')).length;
+              const autoUpdateErrors = parsed.filter(l => (l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')) && (l.level === 'ERROR' || l.raw.includes('[ERROR]'))).length;
+
+              const filtered = parsed.filter((l) => {
+                if (logFilterCategory === 'AUTO_UPDATE') {
+                  if (l.category !== 'AUTO_UPDATE' && l.category !== 'AUTO_UPDATER' && !l.raw.includes('AUTO_UPDATE') && !l.raw.includes('AUTO_UPDATER')) return false;
+                } else if (logFilterCategory === 'RUN_SUITE') {
+                  if (l.category !== 'RUN_SUITE' && !l.raw.includes('RUN_SUITE')) return false;
+                } else if (logFilterCategory === 'CHROME_INSPECTOR') {
+                  if (l.category !== 'CHROME_INSPECTOR' && !l.raw.includes('CHROME_INSPECTOR')) return false;
+                } else if (logFilterCategory === 'SYSTEM') {
+                  if (l.category !== 'SYSTEM' && !l.raw.includes('SYSTEM')) return false;
+                }
+
+                if (logSearchTerm.trim()) {
+                  const term = logSearchTerm.toLowerCase();
+                  return l.raw.toLowerCase().includes(term);
+                }
+                return true;
+              });
+
+              return (
+                <div className="space-y-5">
+                  {/* Auto-Update System Diagnostic & Status Box */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                      <div className="flex items-start space-x-3">
+                        <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 mt-0.5">
+                          <Radio className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-base font-bold text-white">Auto-Update Logging & Diagnostic Subsystem</h3>
+                            <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full font-bold">
+                              Category: AUTO_UPDATE
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Tracks GitHub release checks, download speed, payload verification, and diagnostic stack traces.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <button
+                          onClick={handleTriggerUpdateCheck}
+                          disabled={isCheckingUpdates}
+                          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                          <span>{isCheckingUpdates ? 'Checking Feed...' : 'Run Auto-Update Diagnostic Check'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                        <span className="text-slate-400 block mb-1">Current State</span>
+                        <span className="font-mono font-bold text-cyan-300 uppercase">{updaterState.status || 'idle'}</span>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                        <span className="text-slate-400 block mb-1">Total AUTO_UPDATE Logs</span>
+                        <span className="font-mono font-bold text-white">{autoUpdateTotal} entries</span>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                        <span className="text-slate-400 block mb-1">Auto-Update Errors</span>
+                        <span className={`font-mono font-bold ${autoUpdateErrors > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {autoUpdateErrors} recorded
+                        </span>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                        <span className="text-slate-400 block mb-1">GitHub Feed Endpoint</span>
+                        <span className="font-mono font-semibold text-slate-300 truncate block">adsecurto-boop/Emp_Regression_suite</span>
+                      </div>
+                    </div>
+
+                    {updaterState.message && (
+                      <div className={`p-3 rounded-lg text-xs font-mono flex items-start space-x-2 border ${
+                        updaterState.status === 'error'
+                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                          : updaterState.status === 'available' || updaterState.status === 'downloaded'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                          : 'bg-slate-950 border-slate-800 text-slate-300'
+                      }`}>
+                        {updaterState.status === 'error' ? (
+                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <div>{updaterState.message}</div>
+                          {updaterState.diagnosticHint && (
+                            <div className="mt-1 text-[11px] text-amber-300/90 font-sans">
+                              💡 <strong>Diagnostic Suggestion:</strong> {updaterState.diagnosticHint}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* System Runtime Log Header & Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 p-5 rounded-xl border border-slate-800 backdrop-blur">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <Terminal className="w-5 h-5 text-emerald-400" />
+                        <h3 className="font-bold text-white text-base">System Runtime Log File (log.txt)</h3>
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold">
+                          Live Logger Active
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Select a category filter or search term below to isolate issues and copy/export log reports.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={handleFetchLogs}
+                        disabled={logsLoading}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                      </button>
+                      <button
+                        onClick={handleCopyLogs}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
+                      </button>
+                      <button
+                        onClick={handleClearLogs}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Clear</span>
+                      </button>
+                      <button
+                        onClick={handleDownloadLogs}
+                        className="flex items-center space-x-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download log.txt</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filter & Search Bar */}
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0">
+                      <span className="text-xs text-slate-400 font-semibold flex items-center space-x-1 mr-2 shrink-0">
+                        <Filter className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Filter Category:</span>
                       </span>
+
+                      <button
+                        onClick={() => setLogFilterCategory('ALL')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                          logFilterCategory === 'ALL'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        All Logs ({parsed.length})
+                      </button>
+
+                      <button
+                        onClick={() => setLogFilterCategory('AUTO_UPDATE')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition cursor-pointer shrink-0 ${
+                          logFilterCategory === 'AUTO_UPDATE'
+                            ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
+                            : 'bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 hover:bg-cyan-900/40'
+                        }`}
+                      >
+                        <span>Auto Updates</span>
+                        <span className="bg-cyan-900/80 text-cyan-200 px-1.5 py-0.2 rounded-full text-[10px] font-mono">
+                          {autoUpdateTotal}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setLogFilterCategory('RUN_SUITE')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                          logFilterCategory === 'RUN_SUITE'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Suite Runs
+                      </button>
+
+                      <button
+                        onClick={() => setLogFilterCategory('CHROME_INSPECTOR')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                          logFilterCategory === 'CHROME_INSPECTOR'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Chrome Inspector
+                      </button>
+
+                      <button
+                        onClick={() => setLogFilterCategory('SYSTEM')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                          logFilterCategory === 'SYSTEM'
+                            ? 'bg-slate-700 text-white'
+                            : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        System
+                      </button>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Records all success operations, errors, suite runs, and auto-updater events. Click <strong>Download log.txt</strong> to export and share with developers.
-                    </p>
+
+                    <div className="relative shrink-0 w-full md:w-64">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search logs (e.g. 404, error, v0.1.1)..."
+                        value={logSearchTerm}
+                        onChange={(e) => setLogSearchTerm(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                      {logSearchTerm && (
+                        <button
+                          onClick={() => setLogSearchTerm('')}
+                          className="absolute right-2 top-2 text-slate-500 hover:text-slate-300 text-xs font-bold"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      onClick={handleFetchLogs}
-                      disabled={logsLoading}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
-                    </button>
-                    <button
-                      onClick={handleCopyLogs}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy</span>
-                    </button>
-                    <button
-                      onClick={handleClearLogs}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-medium transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Clear</span>
-                    </button>
-                    <button
-                      onClick={handleDownloadLogs}
-                      className="flex items-center space-x-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-600/30 transition cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Download log.txt</span>
-                    </button>
+                  {/* Log View Area */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-x-auto max-h-[550px] overflow-y-auto leading-relaxed shadow-inner space-y-1.5">
+                    {filtered.length > 0 ? (
+                      filtered.map((item) => {
+                        const isAutoUpdate = item.category === 'AUTO_UPDATE' || item.category === 'AUTO_UPDATER' || item.raw.includes('AUTO_UPDATE');
+                        const isError = item.level === 'ERROR' || item.raw.includes('[ERROR]');
+                        const isSuccess = item.level === 'SUCCESS' || item.raw.includes('[SUCCESS]');
+                        const isWarn = item.level === 'WARN' || item.raw.includes('[WARN]');
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-2 rounded border flex flex-col sm:flex-row sm:items-start gap-2 transition hover:bg-slate-900/60 ${
+                              isError
+                                ? 'bg-rose-950/20 border-rose-900/40 text-rose-200'
+                                : isAutoUpdate
+                                ? 'bg-cyan-950/15 border-cyan-900/40 text-cyan-200'
+                                : isSuccess
+                                ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-200'
+                                : isWarn
+                                ? 'bg-amber-950/10 border-amber-900/30 text-amber-200'
+                                : 'bg-slate-900/20 border-slate-800/60 text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              {item.timestamp && (
+                                <span className="text-slate-500 text-[10px] font-mono shrink-0">
+                                  {item.timestamp.split('T')[1]?.split('.')[0] || item.timestamp}
+                                </span>
+                              )}
+
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase shrink-0 ${
+                                  isError
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : isSuccess
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : isWarn
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    : 'bg-slate-800 text-slate-300'
+                                }`}
+                              >
+                                {item.level}
+                              </span>
+
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold shrink-0 ${
+                                  isAutoUpdate
+                                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                    : item.category === 'RUN_SUITE'
+                                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                    : item.category === 'CHROME_INSPECTOR'
+                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                    : 'bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                [{item.category}]
+                              </span>
+                            </div>
+
+                            <div className="break-all whitespace-pre-wrap flex-1 leading-relaxed">
+                              {item.message || item.raw}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : logs ? (
+                      <div className="text-slate-500 text-center py-12">
+                        No log entries matched filter "{logFilterCategory}" {logSearchTerm ? `with term "${logSearchTerm}"` : ''}.
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 text-center py-16">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" />
+                        Loading log report entries...
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed shadow-inner">
-                  {logs ? (
-                    <pre className="text-slate-300 whitespace-pre-wrap">{logs}</pre>
-                  ) : (
-                    <div className="text-slate-500 text-center py-16">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" />
-                      Loading log report entries...
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </main>
       </div>

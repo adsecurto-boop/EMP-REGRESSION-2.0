@@ -14,8 +14,62 @@ process.on('unhandledRejection', (reason) => {
 let mainWindow;
 let backendProcess = null;
 
-// Configure autoUpdater logs
-autoUpdater.logger = console;
+// Configure autoUpdater logs & dedicated logging channel
+function logToFile(level, category, message, details) {
+  try {
+    const fs = require('fs');
+    const os = require('os');
+    const rootLog = path.join(__dirname, '../log.txt');
+    const userLog = path.join(os.homedir(), '.empmonitor', 'log.txt');
+    const timestamp = new Date().toISOString();
+    let line = `[${timestamp}] [${level}] [${category}] ${message}`;
+    if (details) {
+      if (typeof details === 'object') {
+        try {
+          line += ` | Details: ${JSON.stringify(details)}`;
+        } catch (e) {
+          line += ` | Details: ${String(details)}`;
+        }
+      } else {
+        line += ` | Details: ${details}`;
+      }
+    }
+    line += '\n';
+
+    [rootLog, userLog].forEach((p) => {
+      try {
+        const dir = path.dirname(p);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.appendFileSync(p, line, 'utf-8');
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+const autoUpdateLogger = {
+  info: (msg, ...args) => {
+    const text = [msg, ...args].map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.log('[autoUpdater:info]', text);
+    logToFile('INFO', 'AUTO_UPDATE', text);
+  },
+  warn: (msg, ...args) => {
+    const text = [msg, ...args].map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.warn('[autoUpdater:warn]', text);
+    logToFile('WARN', 'AUTO_UPDATE', text);
+  },
+  error: (msg, ...args) => {
+    const text = [msg, ...args].map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.error('[autoUpdater:error]', text);
+    logToFile('ERROR', 'AUTO_UPDATE', text);
+  },
+  debug: (msg, ...args) => {
+    const text = [msg, ...args].map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.debug('[autoUpdater:debug]', text);
+    logToFile('DEBUG', 'AUTO_UPDATE', text);
+  }
+};
+
+autoUpdater.logger = autoUpdateLogger;
 autoUpdater.autoDownload = true;
 
 function loadURLWithRetry(win, url, attempts = 0) {
@@ -127,9 +181,17 @@ app.whenReady().then(() => {
 
   // Check for updates automatically on startup
   if (app.isPackaged) {
+    logToFile('INFO', 'AUTO_UPDATE', `Application startup auto-update check initiated (Version: v${app.getVersion()}, Platform: ${process.platform}-${process.arch}, Feed Provider: GitHub Releases)`);
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.log('Startup auto-update check error (non-fatal):', err?.message || err);
+      const errMsg = err?.message || String(err);
+      logToFile('ERROR', 'AUTO_UPDATE', `Startup auto-update check error: ${errMsg}`, {
+        version: app.getVersion(),
+        isPackaged: app.isPackaged,
+        errorStack: err?.stack || null
+      });
     });
+  } else {
+    logToFile('INFO', 'AUTO_UPDATE', `Startup check skipped: Running in unpackaged/development mode (app.isPackaged = false, Current Version: v${app.getVersion()})`);
   }
 
   app.on('activate', () => {
@@ -148,29 +210,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Auto-Updater Events
-function logToFile(level, category, message, details) {
-  try {
-    const fs = require('fs');
-    const rootLog = path.join(__dirname, '../log.txt');
-    const timestamp = new Date().toISOString();
-    let line = `[${timestamp}] [${level}] [${category}] ${message}`;
-    if (details) {
-      line += ` | Details: ${typeof details === 'object' ? JSON.stringify(details) : details}`;
-    }
-    line += '\n';
-
-    [rootLog].forEach((p) => {
-      try {
-        fs.appendFileSync(p, line, 'utf-8');
-      } catch (e) {}
-    });
-  } catch (e) {}
-}
-
+// Auto-Updater Events with Detailed AUTO_UPDATE Log Subsystem
 autoUpdater.on('checking-for-update', () => {
   console.log('Auto-updater: checking for update...');
-  logToFile('INFO', 'AUTO_UPDATER', 'Checking for updates via GitHub Releases feed...');
+  logToFile('INFO', 'AUTO_UPDATE', 'Connecting to GitHub Releases feed (https://github.com/adsecurto-boop/Emp_Regression_suite/releases)...', {
+    currentVersion: app.getVersion(),
+    feedProvider: 'GitHub Releases (electron-updater)',
+    timestamp: new Date().toISOString()
+  });
   mainWindow?.webContents.send('updater-status', {
     status: 'checking',
     working: true,
@@ -180,63 +227,114 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('Auto-updater: update available', info?.version);
-  logToFile('SUCCESS', 'AUTO_UPDATER', `Update available: v${info?.version}`, info);
+  logToFile('SUCCESS', 'AUTO_UPDATE', `Update found on GitHub Releases: v${info?.version} (Installed Version: v${app.getVersion()})`, {
+    targetVersion: info?.version,
+    currentVersion: app.getVersion(),
+    releaseName: info?.releaseName || 'N/A',
+    releaseDate: info?.releaseDate || 'N/A',
+    files: info?.files?.map(f => ({ name: f.url, size: f.size })) || [],
+    updateType: 'GitHub Binary Release'
+  });
   mainWindow?.webContents.send('updater-status', {
     status: 'available',
     working: true,
     info,
-    message: `YES - Auto-Updater is Working! New release v${info.version} found on GitHub. Downloading...`
+    message: `YES - Auto-Updater is Working! New release v${info?.version} found on GitHub. Downloading update payload...`
   });
 });
 
 autoUpdater.on('update-not-available', (info) => {
   console.log('Auto-updater: up to date', info?.version);
-  logToFile('SUCCESS', 'AUTO_UPDATER', `Application up to date (v${info?.version || '0.1.0'})`);
+  logToFile('SUCCESS', 'AUTO_UPDATE', `Application is up-to-date. Version v${app.getVersion()} matches or is newer than feed (v${info?.version || app.getVersion()}).`, {
+    installedVersion: app.getVersion(),
+    latestFeedVersion: info?.version || app.getVersion(),
+    checkedAt: new Date().toISOString()
+  });
   mainWindow?.webContents.send('updater-status', {
     status: 'not-available',
     working: true,
     info,
-    message: `YES - Auto-Updater is Working! You are on the latest version (v${info?.version || '0.1.0'}).`
+    message: `YES - Auto-Updater is Working! You are on the latest version (v${app.getVersion()}).`
   });
 });
 
 autoUpdater.on('error', (err) => {
-  const errMsg = err?.message || err?.toString() || 'Unknown updater error';
+  const errMsg = err?.message || String(err);
+  const errStack = err?.stack || 'No stack trace';
+  const is404 = errMsg.includes('404') || errMsg.includes('Cannot find channel');
+  const isNetwork = errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') || errMsg.includes('net::ERR');
+  
+  let diagnosticHint = 'Auto-update check encountered an unhandled exception.';
+  if (is404) {
+    diagnosticHint = 'No published releases found on GitHub repository (HTTP 404). Ensure a release tag (e.g. v0.1.2) is published on github.com/adsecurto-boop/Emp_Regression_suite containing latest.yml and installer .exe.';
+  } else if (isNetwork) {
+    diagnosticHint = 'Network or DNS connectivity failure attempting to reach github.com / github-releases API.';
+  }
+
   console.error('Auto-updater error:', errMsg);
-  logToFile('ERROR', 'AUTO_UPDATER', `Auto-update error: ${errMsg}`);
+  logToFile('ERROR', 'AUTO_UPDATE', `Auto-update error occurred: ${errMsg}`, {
+    errorName: err?.name || 'UpdateError',
+    errorMessage: errMsg,
+    diagnosticHint,
+    installedVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    stackTrace: errStack
+  });
+
   mainWindow?.webContents.send('updater-status', {
     status: 'error',
     working: false,
     error: errMsg,
-    message: `Auto-Update Error: ${errMsg.includes('404') ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
+    diagnosticHint,
+    message: `Auto-Update Error: ${is404 ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
   });
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
-  logToFile('INFO', 'AUTO_UPDATER', `Download progress: ${Math.round(progressObj.percent)}%`);
+  const percent = Math.round(progressObj.percent || 0);
+  const transferredMB = ((progressObj.transferred || 0) / 1024 / 1024).toFixed(2);
+  const totalMB = ((progressObj.total || 0) / 1024 / 1024).toFixed(2);
+  const speedKBs = ((progressObj.bytesPerSecond || 0) / 1024).toFixed(1);
+
+  if (percent === 0 || percent === 100 || percent % 25 === 0) {
+    logToFile('INFO', 'AUTO_UPDATE', `Downloading update payload: ${percent}% (${transferredMB} MB / ${totalMB} MB @ ${speedKBs} KB/s)`, {
+      percent,
+      transferredBytes: progressObj.transferred,
+      totalBytes: progressObj.total,
+      bytesPerSecond: progressObj.bytesPerSecond
+    });
+  }
+
   mainWindow?.webContents.send('updater-status', {
     status: 'downloading',
     working: true,
     progress: progressObj.percent,
     bytesPerSecond: progressObj.bytesPerSecond,
-    message: `Downloading update from GitHub: ${Math.round(progressObj.percent)}%`
+    message: `Downloading update from GitHub: ${percent}% (${transferredMB} MB / ${totalMB} MB)`
   });
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  logToFile('SUCCESS', 'AUTO_UPDATER', `Update downloaded successfully: v${info?.version}`);
+  logToFile('SUCCESS', 'AUTO_UPDATE', `Update package v${info?.version} downloaded successfully and checksum verified! Ready for restart and installation.`, {
+    downloadedVersion: info?.version,
+    releaseName: info?.releaseName || 'N/A',
+    downloadedAt: new Date().toISOString()
+  });
   mainWindow?.webContents.send('updater-status', {
     status: 'downloaded',
     working: true,
     info,
-    message: `YES - Update v${info.version} downloaded successfully! Ready to restart and install.`
+    message: `YES - Update v${info?.version} downloaded successfully! Ready to restart and install.`
   });
 });
 
 // IPC handlers
 ipcMain.handle('check-for-updates', async () => {
-  logToFile('INFO', 'AUTO_UPDATER', 'User manually clicked Check For Updates');
+  logToFile('INFO', 'AUTO_UPDATE', `Manual update check triggered by user (Current Version: v${app.getVersion()}, IsPackaged: ${app.isPackaged})`);
+  
   if (!app.isPackaged) {
+    logToFile('WARN', 'AUTO_UPDATE', `Manual check notice: Application is running in development mode (app.isPackaged = false). Auto-updater requires a packaged .exe binary to download and apply GitHub updates.`);
     const devInfo = {
       status: 'dev',
       working: true,
@@ -245,13 +343,17 @@ ipcMain.handle('check-for-updates', async () => {
     mainWindow?.webContents.send('updater-status', devInfo);
     return devInfo;
   }
+
   try {
     const result = await autoUpdater.checkForUpdates();
+    logToFile('INFO', 'AUTO_UPDATE', `checkForUpdates() call executed successfully. Awaiting feed response...`);
     return { status: 'checking', working: true, message: 'Check initiated with GitHub Releases.', result };
   } catch (err) {
-    const errMsg = err?.message || err?.toString() || 'Error checking updates';
-    console.error('Update check exception:', errMsg);
-    logToFile('ERROR', 'AUTO_UPDATER', `Check exception: ${errMsg}`);
+    const errMsg = err?.message || String(err);
+    logToFile('ERROR', 'AUTO_UPDATE', `Manual checkForUpdates() exception: ${errMsg}`, {
+      errorMessage: errMsg,
+      stackTrace: err?.stack || null
+    });
     const errPayload = {
       status: 'error',
       working: false,
@@ -264,7 +366,7 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('restart-and-install', () => {
-  logToFile('INFO', 'AUTO_UPDATER', 'Triggered quitAndInstall');
+  logToFile('INFO', 'AUTO_UPDATE', `User triggered Restart & Install. Calling autoUpdater.quitAndInstall() to update application.`);
   autoUpdater.quitAndInstall();
 });
 
