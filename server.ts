@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import fs from "fs";
 
 // Safe directory determination supporting ESM, bundled CJS, and Electron app.asar
@@ -229,6 +229,21 @@ async function startServer() {
   // API to trigger framework test run
   app.post("/api/run", (req, res) => {
     const { plugin, environment, checkOnly } = req.body || {};
+
+    // Validate parameters at the very beginning to ensure security in all paths (including fallback)
+    if (environment) {
+      if (typeof environment !== "string" || !/^[a-zA-Z0-9_-]+$/.test(environment)) {
+        writeLogEntry("ERROR", "RUN_SUITE", `Invalid environment format: ${environment}`);
+        return res.status(400).json({ error: "Invalid environment format." });
+      }
+    }
+    if (plugin) {
+      if (typeof plugin !== "string" || !/^[a-zA-Z0-9_-]+$/.test(plugin)) {
+        writeLogEntry("ERROR", "RUN_SUITE", `Invalid plugin format: ${plugin}`);
+        return res.status(400).json({ error: "Invalid plugin format." });
+      }
+    }
+
     const execDir = getUnpackedPath(ROOT_DIR);
     const pythonExe = findPythonExecutable();
 
@@ -242,20 +257,25 @@ async function startServer() {
     }
 
     const runPyPath = path.join(execDir, "run.py");
-    let cmd = `${pythonExe} "${runPyPath}"`;
+    const args: string[] = [runPyPath];
 
     if (checkOnly) {
-      cmd += " --check";
+      args.push("--check");
     } else {
       if (environment) {
-        cmd += ` --environment ${environment}`;
+        args.push("--environment", environment);
       }
       if (plugin) {
-        cmd += ` --plugin ${plugin}`;
+        args.push("--plugin", plugin);
       }
     }
 
-    exec(cmd, { cwd: execDir }, (error, stdout, stderr) => {
+    let exePath = pythonExe;
+    if (exePath.startsWith('"') && exePath.endsWith('"')) {
+      exePath = exePath.slice(1, -1);
+    }
+
+    execFile(exePath, args, { cwd: execDir }, (error, stdout, stderr) => {
       if (error && (error.code === "ENOENT" || (typeof error.message === "string" && error.message.includes("ENOENT")))) {
         writeLogEntry("WARN", "RUN_SUITE", "Python spawn returned ENOENT. Executing fallback Node.js suite runner.");
         const fallbackResult = runNodeFallbackReport(execDir, plugin, environment, checkOnly);
@@ -364,6 +384,14 @@ async function startServer() {
   app.post("/api/chrome/launch-check", (req, res) => {
     const { recordingScript } = req.body || {};
     const scriptToRun = recordingScript || "002_dashboard_home.py";
+
+    // Validate script to run format strictly
+    const scriptRegex = /^[a-zA-Z0-9_-]+\.py$/;
+    if (typeof scriptToRun !== "string" || !scriptRegex.test(scriptToRun)) {
+      writeLogEntry("ERROR", "CHROME_INSPECTOR", `Invalid script format: ${scriptToRun}`);
+      return res.status(400).json({ error: "Invalid script format." });
+    }
+
     const execDir = getUnpackedPath(ROOT_DIR);
     const scriptPath = path.join(execDir, "recordings", scriptToRun);
 
@@ -385,8 +413,12 @@ async function startServer() {
       });
     }
 
-    const cmd = `${pythonExe} "${scriptPath}"`;
-    exec(cmd, { cwd: execDir }, (error, stdout, stderr) => {
+    let exePath = pythonExe;
+    if (exePath.startsWith('"') && exePath.endsWith('"')) {
+      exePath = exePath.slice(1, -1);
+    }
+
+    execFile(exePath, [scriptPath], { cwd: execDir }, (error, stdout, stderr) => {
       const isSuccess = !error || error.code === 0;
       writeLogEntry(isSuccess ? "SUCCESS" : "ERROR", "CHROME_INSPECTOR", `Executed ${scriptToRun} with exit code ${error ? error.code : 0}`);
       res.json({
