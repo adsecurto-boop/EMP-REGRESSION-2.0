@@ -1,0 +1,20 @@
+{
+  "evidence_catalog": {
+    "EV-001": {
+      "layer": "CONFIGURATION",
+      "source": "empm.ini"
+    },
+    "EV-005": {
+      "layer": "RUNTIME",
+      "source": "process"
+    },
+    "EV-007": {
+      "layer": "DATABASE",
+      "source": "local_db"
+    }
+  },
+  "system_thresholds": {
+    "min_windows_build": 10240,
+    "max_clock_drift_seconds": 120
+  }
+}

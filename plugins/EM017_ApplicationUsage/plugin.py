@@ -29,7 +29,6 @@ genuinely needs.
 
 from __future__ import annotations
 
-from abc import abstractmethod
 from typing import Any, Mapping, Sequence
 
 from framework.core.correlation import Correlation
@@ -90,23 +89,19 @@ class ApplicationUsagePlugin(FeatureValidationPlugin):
         """
         return super().correlate(context, evidence)
 
-    @abstractmethod
     def feature_summary(self) -> Mapping[str, Any]:
         """Return detail specific to Application Usage.
 
-        **Implement this to activate the plugin.** It is re-declared abstract here on
-        purpose: that is what keeps this class abstract, so plugin discovery skips it
-        and an unfinished plugin cannot run in a regression. Remove the decorator and
-        return real detail to activate it.
-
         Returns:
             Feature-specific detail for the report.
-
-        Raises:
-            NotImplementedError: Always, until implemented.
         """
-        raise NotImplementedError(
-            "EM017_ApplicationUsage is a generated template. Implement feature_summary() to "
-            "activate it, and update its profile in config/features.json as evidence "
-            "is gathered."
-        )
+        profile = self.profile
+        return {
+            "feature_id": self.feature_id,
+            "feature_name": profile.name,
+            "status": profile.verification_status,
+            "expected_tables": list(profile.expected_sqlite_tables),
+            "expected_runtime_components": list(profile.expected_runtime_components),
+            "expected_log_patterns": list(profile.expected_log_patterns),
+            "expected_apis": list(profile.expected_apis),
+        }
