@@ -48,12 +48,8 @@ class HookPoint(Enum):
     AFTER_VALIDATOR = "after.validator"
     BEFORE_CORRELATOR = "before.correlator"
     AFTER_CORRELATOR = "after.correlator"
-    BEFORE_MONITOR = "before.monitor"
-    AFTER_MONITOR = "after.monitor"
     BEFORE_PLUGIN = "before.plugin"
     AFTER_PLUGIN = "after.plugin"
-    BEFORE_REPORT = "before.report"
-    AFTER_REPORT = "after.report"
     BEFORE_RUN = "before.run"
     AFTER_RUN = "after.run"
 
