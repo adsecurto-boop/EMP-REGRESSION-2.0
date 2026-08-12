@@ -50,7 +50,7 @@
   "publish": {
     "provider": "github",
     "owner": "adsecurto-boop",
-    "repo": "Emp_Regression_suite",
-    "releaseType": "draft"
+    "repo": "EMP-REGRESSION-2.0",
+    "releaseType": "release"
   }
 }

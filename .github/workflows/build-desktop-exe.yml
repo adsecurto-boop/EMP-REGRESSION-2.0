@@ -44,6 +44,14 @@ jobs:
       - name: Build Web App & Backend Server
         run: npm run build
 
+      - name: Extract Version from package.json
+        id: get_version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "APP_VERSION=v$VERSION" >> $GITHUB_ENV
+          echo "Version extracted: v$VERSION"
+
       - name: Build and Package Windows Desktop Executables (Installer & Portable)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,10 +59,14 @@ jobs:
         run: |
           npx electron-builder --config electron-builder.json --publish always || npx electron-builder --config electron-builder.json --publish never
 
-      - name: Create GitHub Release Artifact (Fallback)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish Public GitHub Release for Auto-Update
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.APP_VERSION }}
+          name: EmpMonitor Desktop Suite ${{ env.APP_VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
           files: |
             dist-electron/*.exe
             dist-electron/latest.yml
@@ -64,7 +76,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: EmpMonitor-Desktop-EXE
+          name: EmpMonitor-Desktop-EXE-${{ env.APP_VERSION }}
           path: |
             dist-electron/*.exe
             dist-electron/latest.yml

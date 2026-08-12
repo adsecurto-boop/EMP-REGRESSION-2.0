@@ -213,7 +213,7 @@ app.on('window-all-closed', () => {
 // Auto-Updater Events with Detailed AUTO_UPDATE Log Subsystem
 autoUpdater.on('checking-for-update', () => {
   console.log('Auto-updater: checking for update...');
-  logToFile('INFO', 'AUTO_UPDATE', 'Connecting to GitHub Releases feed (https://github.com/adsecurto-boop/Emp_Regression_suite/releases)...', {
+  logToFile('INFO', 'AUTO_UPDATE', 'Connecting to GitHub Releases feed (https://github.com/adsecurto-boop/EMP-REGRESSION-2.0/releases)...', {
     currentVersion: app.getVersion(),
     feedProvider: 'GitHub Releases (electron-updater)',
     timestamp: new Date().toISOString()
@@ -266,7 +266,7 @@ autoUpdater.on('error', (err) => {
   
   let diagnosticHint = 'Auto-update check encountered an unhandled exception.';
   if (is404) {
-    diagnosticHint = 'No published releases found on GitHub repository (HTTP 404). Ensure a release tag (e.g. v0.1.2) is published on github.com/adsecurto-boop/Emp_Regression_suite containing latest.yml and installer .exe.';
+    diagnosticHint = 'No published releases found on GitHub repository (HTTP 404). Ensure a release tag (e.g. v0.1.2) is published on github.com/adsecurto-boop/EMP-REGRESSION-2.0 containing latest.yml and installer .exe.';
   } else if (isNetwork) {
     diagnosticHint = 'Network or DNS connectivity failure attempting to reach github.com / github-releases API.';
   }

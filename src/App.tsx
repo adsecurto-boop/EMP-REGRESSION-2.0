@@ -1139,7 +1139,7 @@ export default function App() {
                       </div>
                       <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
                         <span className="text-slate-400 block mb-1">GitHub Feed Endpoint</span>
-                        <span className="font-mono font-semibold text-slate-300 truncate block">adsecurto-boop/Emp_Regression_suite</span>
+                        <span className="font-mono font-semibold text-slate-300 truncate block">adsecurto-boop/EMP-REGRESSION-2.0</span>
                       </div>
                     </div>
 

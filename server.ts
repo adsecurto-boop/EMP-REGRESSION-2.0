@@ -354,7 +354,7 @@ async function startServer() {
       chromeProfileAvailable: playwrightProfileExists,
       playwrightProfilePath: "playwright-profile",
       recordingsAvailable: recordingsCount,
-      githubRepo: "adsecurto-boop/Emp_Regression_suite",
+      githubRepo: "adsecurto-boop/EMP-REGRESSION-2.0",
       autoUpdaterProvider: "GitHub Releases (electron-updater)",
       buildTarget: "Windows x64 Desktop (.exe installer & portable)"
     });
