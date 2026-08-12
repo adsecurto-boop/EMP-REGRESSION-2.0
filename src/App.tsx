@@ -56,7 +56,7 @@ export default function App() {
 
   const [toast, setToast] = useState<ToastNotification | null>(null);
 
-  const [appVersion, setAppVersion] = useState<string>('0.1.0');
+  const [appVersion, setAppVersion] = useState<string>('0.1.1');
 
   const [runResult, setRunResult] = useState<{
     stdout: string;
@@ -367,8 +367,9 @@ export default function App() {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-lg font-bold text-white tracking-wide">EmpMonitor Desktop & Chrome Suite</h1>
-              <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold">
-                v{appVersion}
+              <span className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono px-2.5 py-0.5 rounded-full font-bold flex items-center space-x-1.5 shadow-sm shadow-indigo-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>v{appVersion}</span>
               </span>
             </div>
             <p className="text-xs text-slate-400">Integrated Chrome Browser Inspection & GitHub Auto-Updating EXE Client</p>
