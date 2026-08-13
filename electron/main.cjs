@@ -72,6 +72,13 @@ const autoUpdateLogger = {
 autoUpdater.logger = autoUpdateLogger;
 autoUpdater.autoDownload = true;
 
+// Configure authorization header if token present for private repositories
+if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) {
+  autoUpdater.requestHeaders = {
+    Authorization: `token ${process.env.GH_TOKEN || process.env.GITHUB_TOKEN}`
+  };
+}
+
 function loadURLWithRetry(win, url, attempts = 0) {
   win.loadURL(url).catch((err) => {
     console.log(`Waiting for backend server at ${url} (attempt ${attempts + 1})...`);
@@ -266,7 +273,7 @@ autoUpdater.on('error', (err) => {
   
   let diagnosticHint = 'Auto-update check encountered an unhandled exception.';
   if (is404) {
-    diagnosticHint = 'No published releases found on GitHub repository (HTTP 404). Ensure a release tag (e.g. v0.1.2) is published on github.com/adsecurto-boop/EMP-REGRESSION-2.0 containing latest.yml and installer .exe.';
+    diagnosticHint = 'HTTP 404 - Release not found on github.com/adsecurto-boop/EMP-REGRESSION-2.0. Reasons: 1) GitHub Actions workflow is still building the release on Windows (~3-5 mins after commit); 2) Repo is Private (GitHub API returns 404 unless repo is set to Public under Settings); 3) No published release tag exists on GitHub yet.';
   } else if (isNetwork) {
     diagnosticHint = 'Network or DNS connectivity failure attempting to reach github.com / github-releases API.';
   }
