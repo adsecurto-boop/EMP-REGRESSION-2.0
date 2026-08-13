@@ -1,0 +1,7 @@
+[
+  "codegen/auth/test_invalid_login.py::test_invalid_login[chromium]",
+  "codegen/reporting/test_reporting_system.py::test_catalog_loader",
+  "codegen/reporting/test_reporting_system.py::test_custom_decorator_marker",
+  "codegen/reporting/test_reporting_system.py::test_mask_secrets",
+  "codegen/reporting/test_reporting_system.py::test_report_generators"
+]

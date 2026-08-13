@@ -4,10 +4,50 @@
 import os
 import pytest
 from playwright.sync_api import Playwright, BrowserContext, Page
+from codegen.reporting.reporter import TestReporter
 
 DEFAULT_BASE_URL = os.getenv("EMPMONITOR_BASE_URL", "https://app.dev.empmonitor.com/amember/member")
 DEFAULT_USERNAME = os.getenv("EMPMONITOR_USERNAME", "qt_dev")
 DEFAULT_PASSWORD = os.getenv("EMPMONITOR_PASSWORD", "qt_developers")
+
+
+def pytest_configure(config):
+    """Configure custom pytest markers and initialize global reporter."""
+    config.addinivalue_line(
+        "markers",
+        "testcase(id, module, title, test_data, expected, preconditions, description): Metadata marker for automated QA reports"
+    )
+    reporter = TestReporter()
+    reporter.setup_directories()
+    config._reporter = reporter
+
+
+def pytest_runtest_setup(item):
+    """Track item start execution time."""
+    reporter = getattr(item.config, "_reporter", None)
+    if reporter:
+        reporter.record_start(item.nodeid)
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Collect test outcomes, capture failure screenshots, and pass to reporter."""
+    outcome = yield
+    report = outcome.get_result()
+    
+    if report.when == "call" or (report.when == "setup" and (report.failed or report.skipped)):
+        reporter = getattr(item.config, "_reporter", None)
+        if reporter:
+            page_obj = item.funcargs.get("auth_page") or item.funcargs.get("page")
+            reporter.record_result(item, report, page_obj=page_obj)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Generate final HTML, DOCX, and JSON reports and print terminal summary."""
+    reporter = getattr(session.config, "_reporter", None)
+    if reporter:
+        summary = reporter.generate_reports()
+        reporter.print_terminal_summary(summary)
 
 
 @pytest.fixture(scope="session")
@@ -46,3 +86,4 @@ def auth_page(authenticated_context: BrowserContext) -> Page:
     """Provide an authenticated Playwright Page."""
     pages = authenticated_context.pages
     return pages[0] if pages else authenticated_context.new_page()
+

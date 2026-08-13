@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMPMonitor Regression Test Report</title>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #2563eb;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --pass-bg: #dcfce7;
+            --pass-text: #15803d;
+            --fail-bg: #fee2e2;
+            --fail-text: #b91c1c;
+            --skip-bg: #fef3c7;
+            --skip-text: #b45309;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 24px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        header {
+            background: var(--card-bg);
+            padding: 24px 32px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 26px;
+            color: var(--primary);
+        }
+        .subtitle {
+            color: var(--muted);
+            margin: 0;
+            font-size: 14px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        .stat-val {
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            background: var(--card-bg);
+            padding: 20px 24px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 12px;
+            display: inline-block;
+        }
+        .badge.pass { background: var(--pass-bg); color: var(--pass-text); }
+        .badge.fail { background: var(--fail-bg); color: var(--fail-text); }
+        .badge.skip { background: var(--skip-bg); color: var(--skip-text); }
+        .badge.overall-pass { background: var(--pass-bg); color: var(--pass-text); font-size: 14px; padding: 6px 14px; }
+        .badge.overall-fail { background: var(--fail-bg); color: var(--fail-text); font-size: 14px; padding: 6px 14px; }
+        .badge.overall-skip { background: var(--skip-bg); color: var(--skip-text); font-size: 14px; padding: 6px 14px; }
+        .table-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            background: #f1f5f9;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .failure-card {
+            background: var(--card-bg);
+            border: 1px solid #fca5a5;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .failure-card .card-header {
+            background: #fef2f2;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #fecaca;
+        }
+        .failure-card .card-header h3 { margin: 0; font-size: 16px; color: var(--fail-text); }
+        .failure-card .card-body { padding: 20px; }
+        .error-trace {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin: 12px 0;
+        }
+        .error-trace pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+        .screenshot-img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .evidence-box {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>EMPMonitor Regression Test Report</h1>
+            <p class="subtitle">Automated Playwright QA Execution Results</p>
+        </header>
+
+        <div class="summary-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Tests</div>
+                <div class="stat-val" style="color: var(--primary);">5</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Passed</div>
+                <div class="stat-val" style="color: var(--pass-text);">5</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Failed</div>
+                <div class="stat-val" style="color: var(--fail-text);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Skipped</div>
+                <div class="stat-val" style="color: var(--skip-text);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Pass Percentage</div>
+                <div class="stat-val" style="color: var(--accent);">100.0%</div>
+            </div>
+        </div>
+
+        <div class="meta-grid">
+            <div><strong>Application:</strong> EmpMonitor</div>
+            <div><strong>Environment:</strong> DEV</div>
+            <div><strong>Browser:</strong> Chromium</div>
+            <div><strong>Base URL:</strong> <code>https://app.dev.empmonitor.com/amember/member</code></div>
+            <div><strong>Execution Date/Time:</strong> 2026-08-13_18-09-04</div>
+            <div><strong>Overall Verdict:</strong> <span class="badge overall-pass">PASSED</span></div>
+        </div>
+
+        <section class="section">
+            <h2>📋 Executed Test Cases</h2>
+            <div class="table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TC ID</th>
+                            <th>Module</th>
+                            <th>Test Case</th>
+                            <th>Test Data</th>
+                            <th>Expected Result</th>
+                            <th>Actual Result</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-right">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+            <tr>
+                <td><strong>TC-REP-000</strong></td>
+                <td>Reporting</td>
+                <td>test_mask_secrets</td>
+                <td><code>-</code></td>
+                <td>Execution completes without assertion errors</td>
+                <td>Executed successfully without assertion or runtime errors</td>
+                <td class="text-center"><span class="badge pass">PASS</span></td>
+                <td class="text-right">0.00s</td>
+            </tr>
+            
+            <tr>
+                <td><strong>TC-REP-000</strong></td>
+                <td>Reporting</td>
+                <td>test_catalog_loader</td>
+                <td><code>-</code></td>
+                <td>Execution completes without assertion errors</td>
+                <td>Executed successfully without assertion or runtime errors</td>
+                <td class="text-center"><span class="badge pass">PASS</span></td>
+                <td class="text-right">0.00s</td>
+            </tr>
+            
+            <tr>
+                <td><strong>TC-UNIT-999</strong></td>
+                <td>Testing</td>
+                <td>Custom decorator test</td>
+                <td><code>{&#x27;key&#x27;: &#x27;val&#x27;}</code></td>
+                <td>Passes unit test</td>
+                <td>Executed successfully without assertion or runtime errors</td>
+                <td class="text-center"><span class="badge pass">PASS</span></td>
+                <td class="text-right">0.00s</td>
+            </tr>
+            
+            <tr>
+                <td><strong>TC-REP-000</strong></td>
+                <td>Reporting</td>
+                <td>test_report_generators</td>
+                <td><code>-</code></td>
+                <td>Execution completes without assertion errors</td>
+                <td>Executed successfully without assertion or runtime errors</td>
+                <td class="text-center"><span class="badge pass">PASS</span></td>
+                <td class="text-right">0.09s</td>
+            </tr>
+            
+            <tr>
+                <td><strong>TC-AUTH-002</strong></td>
+                <td>Authentication</td>
+                <td>Invalid login failure</td>
+                <td><code>Bad username &amp; password</code></td>
+                <td>Username field remains visible</td>
+                <td>Executed successfully without assertion or runtime errors</td>
+                <td class="text-center"><span class="badge pass">PASS</span></td>
+                <td class="text-right">1.96s</td>
+            </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        
+    </div>
+</body>
+</html>
