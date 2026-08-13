@@ -1,0 +1,2 @@
+"""Applications tracking module.
+"""

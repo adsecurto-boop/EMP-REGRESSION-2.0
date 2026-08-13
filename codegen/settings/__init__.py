@@ -1,0 +1,2 @@
+"""Settings test module.
+"""

@@ -1,0 +1,2 @@
+"""Screen recording test module.
+"""
