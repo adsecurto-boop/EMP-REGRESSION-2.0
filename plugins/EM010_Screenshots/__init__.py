@@ -1,7 +1,7 @@
-"""EM010_Screenshots -- Screenshots.
+"""EM010_Screenshots -- Screenshots plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates screenshot configuration, runtime processes, sqlite persistence,
+and upload telemetry across layers L1-L4.
 """
 
 from __future__ import annotations

@@ -1,7 +1,6 @@
-"""EM016_Keystrokes -- Keystrokes.
+"""EM016_Keystrokes -- Keystrokes plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates keystroke telemetry and reporting events.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM016_Keystrokes.plugin import KeystrokesPlugin
 
 __all__ = ["KeystrokesPlugin"]
+

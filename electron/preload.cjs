@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getLogs: () => ipcRenderer.invoke('get-logs'),
   downloadLogs: () => ipcRenderer.invoke('download-logs'),
+  appendLog: (logData) => ipcRenderer.invoke('append-log', logData),
   onUpdaterStatus: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('updater-status', listener);

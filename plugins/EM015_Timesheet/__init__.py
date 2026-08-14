@@ -1,7 +1,6 @@
-"""EM015_Timesheet -- Timesheet.
+"""EM015_Timesheet -- Timesheet plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates timesheet aggregation across clock_data6 and usagedata6 persistence.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM015_Timesheet.plugin import TimesheetPlugin
 
 __all__ = ["TimesheetPlugin"]
+

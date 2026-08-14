@@ -423,3 +423,10 @@ ipcMain.handle('download-logs', async () => {
     return { success: false, error: err?.message || String(err) };
   }
 });
+
+ipcMain.handle('append-log', (_event, logData) => {
+  const { level, category, message, details } = logData || {};
+  const validLevel = (['INFO', 'SUCCESS', 'WARN', 'ERROR'].includes(level) ? level : 'INFO');
+  logToFile(validLevel, category || 'CLIENT', message || 'Client event logged', details);
+  return { success: true };
+});

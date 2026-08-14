@@ -1,7 +1,6 @@
-"""EM013_Attendance -- Attendance.
+"""EM013_Attendance -- Attendance plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates clock tracking configuration, clock_data6 persistence, and attendance reports.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM013_Attendance.plugin import AttendancePlugin
 
 __all__ = ["AttendancePlugin"]
+

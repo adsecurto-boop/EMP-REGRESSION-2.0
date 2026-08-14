@@ -1,7 +1,6 @@
-"""EM022_Productivity -- Productivity.
+"""EM022_Productivity -- Productivity plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates productive vs unproductive usage categorisation and scoring.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM022_Productivity.plugin import ProductivityPlugin
 
 __all__ = ["ProductivityPlugin"]
+

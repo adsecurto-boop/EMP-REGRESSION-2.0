@@ -1,7 +1,6 @@
-"""EM012_LiveMonitoring -- Live Monitoring.
+"""EM012_LiveMonitoring -- Live Monitoring plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates live monitoring wss endpoints, esr.exe, and web streaming telemetry.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM012_LiveMonitoring.plugin import LiveMonitoringPlugin
 
 __all__ = ["LiveMonitoringPlugin"]
+

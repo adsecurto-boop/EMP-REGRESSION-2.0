@@ -254,7 +254,7 @@ export default function App() {
         setIsBackendReady(true);
       })
       .catch((err) => {
-        console.error('Error fetching features:', err);
+        console.warn('Features fetch notice:', err);
         setIsBackendReady(false);
       });
 
@@ -268,7 +268,7 @@ export default function App() {
         setIsBackendReady(true);
       })
       .catch((err) => {
-        console.error('Error fetching status:', err);
+        console.warn('Status fetch notice:', err);
         setIsBackendReady(false);
       });
 
@@ -346,19 +346,34 @@ export default function App() {
     setUpdateLogs(prev => [...prev, { time, level, msg, details }]);
 
     try {
-      await fetch(`${API_BASE}/api/logs/append`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if ((window as any).electronAPI?.appendLog) {
+        await (window as any).electronAPI.appendLog({
           level,
           category: 'AUTO_UPDATE',
           message: `[AutoUpdate v${appVersion}] ${msg}`,
           details: details ? { details } : undefined
-        })
-      });
-      handleFetchLogs();
+        });
+      } else {
+        await fetch(`${API_BASE}/api/logs/append`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            level,
+            category: 'AUTO_UPDATE',
+            message: `[AutoUpdate v${appVersion}] ${msg}`,
+            details: details ? { details } : undefined
+          })
+        }).catch(() => {
+          // Ignore network log sync failure silently
+        });
+      }
+      try {
+        await handleFetchLogs();
+      } catch {
+        // Ignore log refresh error
+      }
     } catch (e) {
-      console.error('Failed to log update event:', e);
+      console.warn('Update log sync notice:', e);
     }
   };
 

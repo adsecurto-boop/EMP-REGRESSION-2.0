@@ -1,7 +1,6 @@
-"""EM018_WebsiteUsage -- Website Usage.
+"""EM018_WebsiteUsage -- Website Usage plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates browser history interception, usagedata6, download_history, and domain tracking.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM018_WebsiteUsage.plugin import WebsiteUsagePlugin
 
 __all__ = ["WebsiteUsagePlugin"]
+

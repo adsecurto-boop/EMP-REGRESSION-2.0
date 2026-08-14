@@ -1,7 +1,6 @@
-"""EM023_EmailMonitoring -- Email Monitoring.
+"""EM023_EmailMonitoring -- Email Monitoring plugin.
 
-Generated template. The plugin class is abstract until ``feature_summary`` is
-implemented, so plugin discovery skips it and it cannot run in a regression.
+Validates EmailMonitorSvc.exe, mail sqlite tables, and save-email-monitoring-log uploads.
 """
 
 from __future__ import annotations
@@ -9,3 +8,4 @@ from __future__ import annotations
 from plugins.EM023_EmailMonitoring.plugin import EmailMonitoringPlugin
 
 __all__ = ["EmailMonitoringPlugin"]
+
