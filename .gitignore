@@ -12,3 +12,7 @@ reports/*
 
 # Local overrides
 config/environments/*.local.json
+
+# Node
+node_modules/
+dist/
