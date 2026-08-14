@@ -121,11 +121,15 @@ class DependencyResolver:
     def _selection(self, plugin_ids: Iterable[str] | None) -> list[str]:
         """Resolve the requested subset, defaulting to enabled plugins.
 
+        When a subset of plugins is explicitly requested, its transitive required
+        dependencies are included so that prerequisite validation steps (e.g.
+        EM000_EnvironmentValidator) execute ahead of the target plugin.
+
         Args:
             plugin_ids: Requested subset, or ``None`` for all enabled plugins.
 
         Returns:
-            The selected identifiers.
+            The selected identifiers including required dependencies.
 
         Raises:
             PluginDependencyError: If a requested identifier is unknown.
@@ -141,7 +145,23 @@ class DependencyResolver:
                 "Requested plugins are not known to the resolver",
                 {"unknown": sorted(unknown)},
             )
-        return selected
+
+        # Expand transitive required dependencies for requested plugins
+        selected_set = set(selected)
+        frontier = list(selected)
+        while frontier:
+            current = frontier.pop()
+            if current in self._metadata:
+                for dep in self._metadata[current].depends_on:
+                    if (
+                        dep in self._metadata
+                        and self._metadata[dep].enabled
+                        and dep not in selected_set
+                    ):
+                        selected_set.add(dep)
+                        frontier.append(dep)
+
+        return sorted(selected_set)
 
     def _check_versions(self, plugin_id: str, available: set[str]) -> list[DependencyIssue]:
         """Check declared version constraints against available plugin versions.
