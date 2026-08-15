@@ -38,7 +38,9 @@
       }
     ],
     "requestedExecutionLevel": "asInvoker",
-    "signAndEditExecutable": false
+    "signAndEditExecutable": false,
+    "sign": null,
+    "verifyUpdateCodeSignature": false
   },
   "nsis": {
     "oneClick": false,

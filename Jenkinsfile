@@ -16,6 +16,8 @@ pipeline {
 
         // Node.js & electron-builder networking fixes for CI runners
         NODE_OPTIONS = "--dns-result-order=ipv4first"
+        CSC_IDENTITY_AUTO_DISCOVERY = "false"
+        WIN_CSC_IDENTITY_AUTO_DISCOVERY = "false"
         ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
         ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
     }
@@ -127,11 +129,20 @@ pipeline {
                     echo "Packaging Electron Windows Executable Installer and Portable Binary..."
                     if (isUnix()) {
                         sh '''
+                            export CSC_IDENTITY_AUTO_DISCOVERY=false
+                            export WIN_CSC_IDENTITY_AUTO_DISCOVERY=false
+                            export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+                            export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
                             npx electron-builder --config electron-builder.json -c.npmRebuild=false --publish never
                         '''
                     } else {
                         bat '''
                             @echo off
+                            set CSC_IDENTITY_AUTO_DISCOVERY=false
+                            set WIN_CSC_IDENTITY_AUTO_DISCOVERY=false
+                            set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+                            set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+                            set NODE_OPTIONS=--dns-result-order=ipv4first
                             call npx electron-builder --config electron-builder.json -c.npmRebuild=false --publish never
                             exit /b %ERRORLEVEL%
                         '''
