@@ -174,7 +174,7 @@ pipeline {
                                 echo "Selected binary for release: ${BINARY_EXE} (${BINARY_NAME})"
 
                                 # 2. Generate latest.json manifest with SHA-256 and release metadata
-                                python3 scripts/generate_update_manifest.py \
+                                node scripts/generate_update_manifest.mjs \
                                     --binary-path "$BINARY_EXE" \
                                     --version "${RAW_VERSION}" \
                                     --base-url "${BASE_URL}" \
@@ -215,7 +215,7 @@ pipeline {
                                 echo Selected binary for release: %BINARY_EXE% (%BINARY_NAME%)
 
                                 :: 2. Generate latest.json manifest with SHA-256 and release metadata
-                                python scripts\\generate_update_manifest.py ^
+                                node scripts\\generate_update_manifest.mjs ^
                                     --binary-path "%BINARY_EXE%" ^
                                     --version "%RAW_VERSION%" ^
                                     --base-url "%BASE_URL%" ^

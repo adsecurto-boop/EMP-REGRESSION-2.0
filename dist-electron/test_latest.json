@@ -1,0 +1,10 @@
+{
+  "version": "0.1.3",
+  "release_date": "2026-08-15T18:42:25Z",
+  "url": "https://updates.yourdomain.com/package.json",
+  "sha256": "b7b9a277f01dc786d70db83555d5604b894a8208f3d8f75810a1c42b2e3e8328",
+  "mandatory": false,
+  "notes": "EmpMonitor Desktop Suite 0.1.3 automated release build.",
+  "file_size_bytes": 1412,
+  "channel": "stable"
+}
