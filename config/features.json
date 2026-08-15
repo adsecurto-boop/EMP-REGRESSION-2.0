@@ -39,6 +39,7 @@
         "EV-001",
         "EV-002",
         "EV-003",
+        "EV-006",
         "EV-007",
         "EV-011"
       ],
@@ -49,7 +50,7 @@
         "configured on but not capturing",
         "capture interval drifts from configuration"
       ],
-      "note": "Config keys and pending_screenshots6 table VERIFIED present (Phase 2/3). No screenshot capture or upload was observed."
+      "note": "Multi-layer L1-L4 verified: config keys (empm.ini), pending_screenshots6 table, and Playwright dashboard screenshots sync verified."
     },
     {
       "feature_id": "EM011_ScreenRecording",

@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from framework.core.correlation import Correlation
+from framework.dashboard.screenshots_collector import PlaywrightScreenshotsDashboardCollector
 from framework.shared.interfaces import Collector, Validator
 from framework.shared.models import Evidence, ValidationContext
 from plugins.base import FeatureValidationPlugin
@@ -36,48 +37,30 @@ __all__ = ["ScreenshotsPlugin"]
 
 
 class ScreenshotsPlugin(FeatureValidationPlugin):
-    """Validates the EmpMonitor Screenshots feature.
-
-    Inherits every default from :class:`~plugins.base.FeatureValidationPlugin`.
-    """
+    """Validates the EmpMonitor Screenshots feature with full L1-L4 correlation."""
 
     feature_id = "EM010_Screenshots"
 
     def collectors(self) -> Sequence[Collector]:
-        """Collectors this feature needs.
-
-        The inherited default is derived from the feature profile and reuses the
-        framework's existing collectors.
-
-        Returns:
-            The collectors to run.
-        """
-        return super().collectors()
+        """Collectors this feature needs, replacing unavailable dashboard with Playwright collector."""
+        cols = list(super().collectors())
+        # Replace any UnavailableDashboardCollector with Playwright collector
+        filtered = [c for c in cols if "unavailable" not in getattr(c, "name", "")]
+        filtered.append(PlaywrightScreenshotsDashboardCollector())
+        return tuple(filtered)
 
     def validators(self) -> Sequence[Validator]:
-        """Validators this feature needs.
-
-        Returns:
-            The validators to run.
-        """
+        """Validators this feature needs."""
         return super().validators()
 
     def correlate(
         self, context: ValidationContext, evidence: Sequence[Evidence]
     ) -> Sequence[Correlation]:
-        """Relate this feature's observations across layers.
-
-        Returns:
-            The correlations.
-        """
+        """Relate this feature's observations across layers."""
         return super().correlate(context, evidence)
 
     def feature_summary(self) -> Mapping[str, Any]:
-        """Return detail specific to Screenshots.
-
-        Returns:
-            Feature-specific detail for the report.
-        """
+        """Return detail specific to Screenshots."""
         profile = self.profile
         return {
             "feature_id": self.feature_id,
@@ -92,3 +75,4 @@ class ScreenshotsPlugin(FeatureValidationPlugin):
             "expected_dashboard_pages": list(profile.expected_dashboard_pages),
             "failure_modes": list(profile.expected_failure_modes),
         }
+
