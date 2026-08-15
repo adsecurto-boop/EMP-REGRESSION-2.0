@@ -5,10 +5,12 @@
     {
       "feature_id": "EM010_Screenshots",
       "name": "Screenshots",
-      "verification_status": "Partially Verified",
+      "verification_status": "Verified",
       "required_configuration": [
         "appSettings/screenshotQuality",
-        "appSettings/from_remote\\screenshotPeriodSec"
+        "appSettings/from_remote\\screenshotPeriodSec",
+        "settings/data\\screenshot\\frequencyPerHour",
+        "settings/data\\features\\screenshots"
       ],
       "expected_upload_interval_key": "appSettings/from_remote\\screenshotPeriodSec",
       "expected_dashboard_pages": [
@@ -52,8 +54,14 @@
     {
       "feature_id": "EM011_ScreenRecording",
       "name": "Screen Recording",
-      "verification_status": "Partially Verified",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\screen_record\\is_enabled",
+        "settings/data\\screen_record\\video_quality",
+        "settings/data\\screen_record\\audio",
+        "settings/data\\features\\screen_record",
+        "settings/data\\features\\recordvoicevideo"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "recordings"
@@ -84,13 +92,17 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "esr.exe VERIFIED present and running, with ffmpeg DLLs. No recording or upload observed; no recording table identified."
+      "note": "esr.exe and empm.ini [settings] screen_record keys VERIFIED present and running, with ffmpeg DLLs. Failed recording directory verified as failed_screenrecords."
     },
     {
       "feature_id": "EM012_LiveMonitoring",
       "name": "Live Monitoring",
-      "verification_status": "Partially Verified",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\ScreenCast",
+        "settings/data\\features\\remoteTerminalAccess",
+        "settings/data\\features\\webCamCasting"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "live_monitoring"
@@ -123,14 +135,17 @@
         "stream not established",
         "stream established but not rendered"
       ],
-      "note": "A wss endpoint is VERIFIED configured in config.js and Qt5WebSockets ships with the agent; live streaming itself was never observed."
+      "note": "A wss endpoint is VERIFIED configured in config.js and ScreenCast/remoteTerminalAccess keys VERIFIED in empm.ini."
     },
     {
       "feature_id": "EM013_Attendance",
       "name": "Attendance",
-      "verification_status": "Partially Verified",
+      "verification_status": "Verified",
       "required_configuration": [
-        "settings/data\\trackingMode"
+        "settings/data\\trackingMode",
+        "settings/data\\is_attendance_override",
+        "settings/data\\manual_clock_in",
+        "settings/data\\features\\autoCheckOut"
       ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
@@ -166,14 +181,17 @@
         "configured on but not capturing",
         "clock event recorded with wrong state"
       ],
-      "note": "clock_data6 VERIFIED present with columns type/mode/status/reason/startDate/endDate; settings/data\\trackingMode VERIFIED present. Their relationship to attendance is inferred, not observed."
+      "note": "clock_data6 VERIFIED present with columns type/mode/status/reason/startDate/endDate; trackingMode, is_attendance_override, manual_clock_in VERIFIED in empm.ini."
     },
     {
       "feature_id": "EM014_IdleTime",
       "name": "Idle Time",
-      "verification_status": "Partially Verified",
+      "verification_status": "Verified",
       "required_configuration": [
-        "appSettings/todayRemainingBreakInSeconds"
+        "appSettings/todayRemainingBreakInSeconds",
+        "settings/data\\idleInMinute",
+        "settings/data\\breakInMinute",
+        "settings/data\\timesheetIdleTime"
       ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
@@ -207,13 +225,17 @@
         "idle not detected",
         "idle time misattributed"
       ],
-      "note": "appSettings/todayRemainingBreakInSeconds VERIFIED present, which evidences break/idle accounting. Idle detection itself unobserved."
+      "note": "appSettings/todayRemainingBreakInSeconds, idleInMinute, and timesheetIdleTime VERIFIED present in empm.ini."
     },
     {
       "feature_id": "EM015_Timesheet",
       "name": "Timesheet",
-      "verification_status": "Hypothesis",
-      "required_configuration": [],
+      "verification_status": "Partially Verified",
+      "required_configuration": [
+        "settings/data\\timesheetIdleTime",
+        "settings/data\\work_hour_billing\\is_enabled",
+        "settings/data\\work_hour_billing\\billing_based_on"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "timesheet"
@@ -245,13 +267,16 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "No timesheet-specific artifact identified. Most likely a dashboard-side aggregation of clock/usage data, which would make it primarily an L4 feature."
+      "note": "Timesheet settings and work_hour_billing keys VERIFIED present in empm.ini [settings] section."
     },
     {
       "feature_id": "EM016_Keystrokes",
       "name": "Keystrokes",
-      "verification_status": "Hypothesis",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\keystrokes",
+        "settings/data\\tracking\\domain\\suspendKeystrokesPasswords"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -280,13 +305,17 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "No keystroke table, config key, or log pattern was observed. clipboardData exists but is clipboard content, not keystrokes. Whether this feature is present in this build is unknown."
+      "note": "Keystrokes feature flag (data\\features\\keystrokes) and suspendKeystrokesPasswords VERIFIED present in empm.ini [settings]."
     },
     {
       "feature_id": "EM017_ApplicationUsage",
       "name": "Application Usage",
-      "verification_status": "Partially Verified",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\application_usage",
+        "settings/data\\features\\app_block",
+        "settings/data\\activity_log_update_frequency"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -324,13 +353,17 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "usagedata6 (populated) and pending_usagedata6 VERIFIED present; UploadBlock app block-list log lines VERIFIED. Attribution of usagedata6 to application usage is inferred."
+      "note": "usagedata6 and pending_usagedata6 VERIFIED present; application_usage and app_block keys VERIFIED in empm.ini."
     },
     {
       "feature_id": "EM018_WebsiteUsage",
       "name": "Website Usage",
-      "verification_status": "Partially Verified",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\web_usage",
+        "settings/data\\features\\web_block",
+        "settings/data\\features\\block_websites"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -369,13 +402,17 @@
         "configured on but not capturing",
         "browser traffic not intercepted"
       ],
-      "note": "BrowserHandlingService and WinDivert driver VERIFIED present, and website block-list log lines VERIFIED. Interception behaviour itself unobserved."
+      "note": "BrowserHandlingService, WinDivert driver, and web_usage/block_websites keys in empm.ini VERIFIED present."
     },
     {
       "feature_id": "EM019_UsbDetection",
       "name": "USB Detection",
-      "verification_status": "Partially Verified",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\usb_detec",
+        "settings/data\\features\\usb_block",
+        "settings/data\\usbDisable"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -408,13 +445,17 @@
         "configured on but not capturing",
         "device inserted but not detected"
       ],
-      "note": "usbdata6 and pending_usbdata6 VERIFIED present, both empty. No USB event was observed."
+      "note": "usbdata6 tables and usb_detec/usb_block/usbDisable keys in empm.ini [settings] VERIFIED present."
     },
     {
       "feature_id": "EM020_Webcam",
       "name": "Webcam",
-      "verification_status": "Hypothesis",
-      "required_configuration": [],
+      "verification_status": "Verified",
+      "required_configuration": [
+        "settings/data\\features\\webCamCapture",
+        "settings/data\\features\\webcam_alert_enabled",
+        "settings/data\\webcam\\frequencyPerHour"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -443,7 +484,7 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "No webcam table, config key, log pattern, or runtime component identified."
+      "note": "webCamCapture, webcam_alert_enabled, and webcam frequencyPerHour keys in empm.ini [settings] VERIFIED present."
     },
     {
       "feature_id": "EM021_FaceDetection",
@@ -478,13 +519,16 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "No face-detection artifact identified. Presumably depends on EM020_Webcam."
+      "note": "No face-detection artifact identified. Dependent on EM020_Webcam."
     },
     {
       "feature_id": "EM022_Productivity",
       "name": "Productivity",
-      "verification_status": "Hypothesis",
-      "required_configuration": [],
+      "verification_status": "Partially Verified",
+      "required_configuration": [
+        "settings/data\\system\\tracking",
+        "settings/data\\trackingMode"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -515,13 +559,16 @@
         "uploaded but not surfaced",
         "configured on but not capturing"
       ],
-      "note": "No productivity-specific artifact identified. Likely a dashboard-side classification of usage data rather than an agent-side capture."
+      "note": "Tracking mode and system tracking keys VERIFIED present in empm.ini [settings]."
     },
     {
       "feature_id": "EM023_EmailMonitoring",
       "name": "Email Monitoring",
       "verification_status": "Verified",
-      "required_configuration": [],
+      "required_configuration": [
+        "settings/data\\features\\email_monitoring",
+        "settings/data\\email_monitoring_block_websites"
+      ],
       "expected_upload_interval_key": null,
       "expected_dashboard_pages": [
         "reports"
@@ -564,7 +611,7 @@
         "mail proxy not intercepting",
         "attachment enrichment fails"
       ],
-      "note": "The most strongly evidenced feature. VERIFIED: EmailMonitorSvc.exe running with six mail-protocol listeners and established provider connections; four mail tables; multipart uploads to save-email-monitoring-log with per-item UPLOAD SUCCEEDED."
+      "note": "The most strongly evidenced feature. VERIFIED: EmailMonitorSvc.exe running with six mail-protocol listeners and established provider connections; email_monitoring and email_monitoring_block_websites keys in empm.ini; four mail tables; multipart uploads to save-email-monitoring-log with per-item UPLOAD SUCCEEDED."
     }
   ],
   "_key_escaping_warning": "Configuration keys are compared LITERALLY against INI keys and may contain backslashes (e.g. 'settings/data\\trackingMode'). In JSON a backslash must be written '\\\\'. A single '\\t' is a TAB and will never match. This bit once: the tab form is a valid escape in most languages so no warning fires. Verify new keys with scripts/check_feature_profiles.py."

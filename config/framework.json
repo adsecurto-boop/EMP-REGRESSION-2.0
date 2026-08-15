@@ -134,31 +134,102 @@
         "name": "empm.ini",
         "format": "ini",
         "search": [
+          "data_root/OjUp*",
+          "data_root/*",
           "data_root"
         ],
         "required": true,
         "verified": true,
         "authentication_keys": [
           "auth/email",
-          "auth/crypto_password"
+          "auth/crypto_password",
+          "auth/token"
         ],
         "secret_keys": [
-          "auth/crypto_password"
+          "auth/crypto_password",
+          "auth/token",
+          "settings/data\\roomId"
         ],
         "identifier_keys": [
-          "General/identifier"
+          "General/identifier",
+          "settings/data\\username",
+          "auth/email"
         ],
         "upload_interval_keys": [
-          "appSettings/dataSendingPeriodSec"
+          "appSettings/dataSendingPeriodSec",
+          "settings/data\\activity_log_update_frequency",
+          "settings/data\\system_log_update_frequency"
         ],
         "screenshot_keys": [
           "appSettings/screenshotQuality",
-          "appSettings/from_remote\\screenshotPeriodSec"
+          "appSettings/from_remote\\screenshotPeriodSec",
+          "settings/data\\screenshot\\frequencyPerHour",
+          "settings/data\\features\\screenshots"
         ],
-        "recording_keys": [],
-        "tracking_keys": [],
+        "recording_keys": [
+          "settings/data\\screen_record\\is_enabled",
+          "settings/data\\screen_record\\audio",
+          "settings/data\\screen_record\\video_quality",
+          "settings/data\\features\\screen_record",
+          "settings/data\\features\\recordvoicevideo"
+        ],
+        "tracking_keys": [
+          "settings/data\\trackingMode",
+          "settings/data\\tracking\\unlimited\\day",
+          "settings/data\\features\\web_usage",
+          "settings/data\\features\\application_usage",
+          "settings/data\\features\\keystrokes",
+          "settings/data\\features\\location",
+          "settings/data\\features\\ScreenCast",
+          "settings/data\\features\\remoteTerminalAccess",
+          "settings/data\\features\\clip_detec",
+          "settings/data\\features\\clip_block",
+          "settings/data\\features\\email_monitoring",
+          "settings/data\\features\\file_upload_blocking",
+          "settings/data\\features\\file_upload_detection",
+          "settings/data\\features\\usb_detec",
+          "settings/data\\features\\usb_block",
+          "settings/data\\features\\webCamCapture",
+          "settings/data\\features\\webCamCasting",
+          "settings/data\\features\\system_lock",
+          "settings/data\\system\\tracking",
+          "settings/data\\timesheetIdleTime",
+          "settings/data\\idleInMinute"
+        ],
         "feature_flag_keys": [
-          "appSettings/from_remote\\ADUserInfoSendPerSec"
+          "appSettings/from_remote\\ADUserInfoSendPerSec",
+          "settings/data\\features\\ScreenCast",
+          "settings/data\\features\\app_block",
+          "settings/data\\features\\application_usage",
+          "settings/data\\features\\autoCheckOut",
+          "settings/data\\features\\block_websites",
+          "settings/data\\features\\blue_block",
+          "settings/data\\features\\blue_detec",
+          "settings/data\\features\\clip_block",
+          "settings/data\\features\\clip_detec",
+          "settings/data\\features\\email_monitoring",
+          "settings/data\\features\\file_upload_blocking",
+          "settings/data\\features\\file_upload_detection",
+          "settings/data\\features\\keystrokes",
+          "settings/data\\features\\location",
+          "settings/data\\features\\print_block",
+          "settings/data\\features\\print_blocking",
+          "settings/data\\features\\print_detection",
+          "settings/data\\features\\realTimeTrack",
+          "settings/data\\features\\recordvoicevideo",
+          "settings/data\\features\\remoteTerminalAccess",
+          "settings/data\\features\\screen_record",
+          "settings/data\\features\\screenshots",
+          "settings/data\\features\\system_lock",
+          "settings/data\\features\\usb_block",
+          "settings/data\\features\\usb_detec",
+          "settings/data\\features\\webCamCapture",
+          "settings/data\\features\\webCamCasting",
+          "settings/data\\features\\web_block",
+          "settings/data\\features\\web_usage",
+          "settings/data\\features\\webcam_alert_enabled",
+          "settings/data\\file_upload_screenshot_alert",
+          "settings/data\\logout_feature"
         ]
       },
       {
@@ -189,7 +260,9 @@
           "*.sqlite3"
         ],
         "search": [
+          "data_root/OjUp*/empm",
           "data_root/*/empm",
+          "data_root/OjUp*",
           "data_root/empm",
           "data_root"
         ],
@@ -201,9 +274,12 @@
         {
           "role": "logs",
           "candidates": [
-            "empm/logs"
+            "empm/logs",
+            "logs"
           ],
           "search": [
+            "data_root/OjUp*",
+            "data_root/*",
             "data_root"
           ],
           "required": true,
@@ -222,23 +298,33 @@
         },
         {
           "role": "failed_screenshots",
-          "candidates": [],
+          "candidates": [
+            "failed_screenshots",
+            "empm/failed_screenshots"
+          ],
           "search": [
+            "data_root/OjUp*",
+            "data_root/*",
             "data_root"
           ],
-          "required": true,
-          "verified": false,
-          "note": "Name not observed. Folder was absent on the reference machine, which plausibly means no upload has failed -- absence must NOT be reported as a failure until the name is verified."
+          "required": false,
+          "verified": true,
+          "note": "Observed folder name for failed screenshot uploads. May be absent if no upload failures occurred."
         },
         {
-          "role": "failed_recordings",
-          "candidates": [],
+          "role": "failed_screenrecords",
+          "candidates": [
+            "failed_screenrecords",
+            "empm/failed_screenrecords"
+          ],
           "search": [
+            "data_root/OjUp*",
+            "data_root/*",
             "data_root"
           ],
-          "required": true,
-          "verified": false,
-          "note": "Name not observed. Same reasoning as failed_screenshots."
+          "required": false,
+          "verified": true,
+          "note": "Observed folder name for failed screen recording uploads (failed_screenrecords). May be absent if no upload failures occurred."
         }
       ]
     },

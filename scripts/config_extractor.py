@@ -98,14 +98,32 @@ def extract_empm_ini(ini_path: Path) -> dict[str, Any]:
     
     # Extract summary highlights
     app_settings = masked_sections.get("appSettings", {})
+    settings_section = masked_sections.get("settings", {})
+    auth_section = masked_sections.get("auth", {})
+    general_section = masked_sections.get("General", {})
+
+    features = {}
+    for k, v in settings_section.items():
+        if "features\\" in k or "dlpFeatures\\" in k:
+            features[k.split("\\")[-1]] = v
+
     return {
         "status": "SUCCESS",
         "path": str(ini_path),
         "sections": masked_sections,
         "summary": {
+            "user_email": auth_section.get("email"),
+            "identifier": general_section.get("identifier"),
             "data_sending_period_sec": app_settings.get("dataSendingPeriodSec"),
             "screenshot_quality": app_settings.get("screenshotQuality"),
             "screenshot_period_sec": app_settings.get("from_remote\\screenshotPeriodSec") or app_settings.get("screenshotPeriodSec"),
+            "tracking_mode": settings_section.get("data\\trackingMode"),
+            "features": features,
+            "screen_record_enabled": settings_section.get("data\\screen_record\\is_enabled") == "1" or settings_section.get("data\\features\\screen_record") == "1",
+            "screenshots_enabled": settings_section.get("data\\features\\screenshots") == "1",
+            "email_monitoring_enabled": settings_section.get("data\\features\\email_monitoring") == "1",
+            "keystrokes_enabled": settings_section.get("data\\features\\keystrokes") == "1",
+            "activity_log_frequency": settings_section.get("data\\activity_log_update_frequency"),
         }
     }
 
