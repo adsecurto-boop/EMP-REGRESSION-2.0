@@ -37,10 +37,7 @@
         "arch": ["x64"]
       }
     ],
-    "requestedExecutionLevel": "asInvoker",
-    "signAndEditExecutable": false,
-    "sign": null,
-    "verifyUpdateCodeSignature": false
+    "requestedExecutionLevel": "asInvoker"
   },
   "nsis": {
     "oneClick": false,
