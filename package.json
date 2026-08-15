@@ -1,5 +1,7 @@
 {
   "name": "emp-regression-suite",
+  "description": "EmpMonitor Desktop Dashboard Runner and Regression Testing Suite",
+  "author": "EmpMonitor Team <support@empmonitor.com>",
   "private": true,
   "version": "0.1.3",
   "main": "electron/main.cjs",

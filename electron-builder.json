@@ -51,6 +51,6 @@
     "provider": "github",
     "owner": "adsecurto-boop",
     "repo": "EMP-REGRESSION-2.0",
-    "releaseType": "release"
+    "releaseType": "draft"
   }
 }
