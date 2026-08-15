@@ -134,8 +134,25 @@ async function main() {
       }
     });
 
-    console.log(`[R2 Upload] Uploading binary: ${fileName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)...`);
-    await uploadToS3(s3, bucketName, fileName, resolvedBinary, 'application/vnd.microsoft.portable-executable', 'public, max-age=31536000, immutable');
+    const distDir = path.resolve(process.cwd(), 'dist-electron');
+    if (fs.existsSync(distDir)) {
+      const allFiles = fs.readdirSync(distDir);
+      for (const file of allFiles) {
+        const fullPath = path.join(distDir, file);
+        if (!fs.statSync(fullPath).isFile()) continue;
+
+        if (file.endsWith('.exe')) {
+          console.log(`[R2 Upload] Uploading executable: ${file}...`);
+          await uploadToS3(s3, bucketName, file, fullPath, 'application/vnd.microsoft.portable-executable', 'public, max-age=31536000, immutable');
+        } else if (file.endsWith('.blockmap')) {
+          console.log(`[R2 Upload] Uploading blockmap: ${file}...`);
+          await uploadToS3(s3, bucketName, file, fullPath, 'application/octet-stream', 'public, max-age=31536000, immutable');
+        } else if (file === 'latest.yml' || file === 'latest-mac.yml' || file === 'latest-linux.yml') {
+          console.log(`[R2 Upload] Uploading electron-updater manifest: ${file}...`);
+          await uploadToS3(s3, bucketName, file, fullPath, 'text/yaml', 'no-cache, no-store, must-revalidate');
+        }
+      }
+    }
 
     console.log('[R2 Upload] Uploading latest.json manifest...');
     await uploadToS3(s3, bucketName, 'latest.json', outputResolved, 'application/json', 'no-cache, no-store, must-revalidate');

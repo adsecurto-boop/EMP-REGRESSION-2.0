@@ -1,6 +1,16 @@
 const { app, BrowserWindow, ipcMain, shell, utilityProcess } = require('electron');
 const path = require('path');
+const dns = require('dns');
 const { autoUpdater } = require('electron-updater');
+
+// Ensure DNS resolution prioritizes IPv4 to avoid IPv6 timeouts on CI/Windows runners
+if (dns && typeof dns.setDefaultResultOrder === 'function') {
+  try {
+    dns.setDefaultResultOrder('ipv4first');
+  } catch (e) {
+    console.warn('DNS result order configuration notice:', e);
+  }
+}
 
 // Handle uncaught exceptions gracefully without throwing fatal UI dialogs
 process.on('uncaughtException', (error) => {

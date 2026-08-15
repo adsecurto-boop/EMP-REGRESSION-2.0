@@ -26,6 +26,7 @@ from framework.shared.constants import (
     MIN_CORROBORATING_LAYERS,
     REPORTS_DIR_NAME,
 )
+from framework.shared.exceptions import FrameworkError
 from framework.shared.logger import get_logger, new_execution_id
 from framework.shared.models import (
     AgentInfo,
@@ -237,7 +238,7 @@ class RuntimeContext:
         resolved = base / f"{stamp}_{self.execution_id[:8]}"
         try:
             self.output_root = filesystem.ensure_directory(resolved)
-        except FrameworkError:
+        except (FrameworkError, PermissionError, OSError):
             # Fallback for installed location (e.g., C:\Program Files) where standard user lacks write permissions
             fallback_base = Path.home() / ".empmonitor" / REPORTS_DIR_NAME
             resolved = fallback_base / f"{stamp}_{self.execution_id[:8]}"
