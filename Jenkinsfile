@@ -20,14 +20,14 @@ pipeline {
                     if (isUnix()) {
                         sh '''
                             npm install --force
-                            pip3 install playwright requests 2>/dev/null || pip install playwright requests 2>/dev/null || python3 -m pip install playwright requests 2>/dev/null || echo "Python pip dependencies checked."
                         '''
                     } else {
                         bat '''
+                            @echo off
                             if exist package-lock.json del /f /q package-lock.json
                             call npm install --force
                             call npm install --no-save @tailwindcss/oxide-win32-x64-msvc @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @esbuild/win32-x64
-                            python -m pip install playwright requests 2>nul || py -m pip install playwright requests 2>nul || pip install playwright requests 2>nul || echo "Python pip optional step skipped on build agent."
+                            exit /b 0
                         '''
                     }
                 }
@@ -40,7 +40,11 @@ pipeline {
                     if (isUnix()) {
                         sh 'npm run build'
                     } else {
-                        bat 'call npm run build'
+                        bat '''
+                            @echo off
+                            call npm run build
+                            exit /b %ERRORLEVEL%
+                        '''
                     }
                 }
             }
@@ -49,12 +53,15 @@ pipeline {
         stage('Extract App Version') {
             steps {
                 script {
-                    if (isUnix()) {
-                        env.APP_VERSION = "v" + sh(script: "node -p \"require('./package.json').version\"", returnStdout: true).trim()
+                    // Pure Groovy extraction: works on all platforms without subprocess execution
+                    def pkgContent = readFile('package.json')
+                    def versionMatch = pkgContent =~ /"version":\s*"([^"]+)"/
+                    if (versionMatch) {
+                        env.APP_VERSION = "v" + versionMatch[0][1]
                     } else {
-                        env.APP_VERSION = "v" + bat(script: "@node -p \"require('./package.json').version\"", returnStdout: true).trim()
+                        env.APP_VERSION = "v1.0.0"
                     }
-                    echo "Building Version: ${env.APP_VERSION}"
+                    echo "Target Release Version: ${env.APP_VERSION}"
                 }
             }
         }
@@ -64,11 +71,13 @@ pipeline {
                 script {
                     if (isUnix()) {
                         sh '''
-                            npx electron-builder --config electron-builder.json --publish always || npx electron-builder --config electron-builder.json --publish never
+                            npx electron-builder --config electron-builder.json --publish always
                         '''
                     } else {
                         bat '''
+                            @echo off
                             call npx electron-builder --config electron-builder.json --publish always
+                            exit /b %ERRORLEVEL%
                         '''
                     }
                 }
