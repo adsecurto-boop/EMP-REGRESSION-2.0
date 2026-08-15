@@ -144,6 +144,45 @@ function findPythonExecutable(): string | null {
   return null;
 }
 
+function getLatestReportData(execDir: string) {
+  const candidateDirs = [
+    path.join(execDir, "reports"),
+    path.join(USER_DATA_DIR, "reports"),
+    path.join(ROOT_DIR, "reports")
+  ];
+
+  let latestFile: { path: string; mtime: number } | null = null;
+
+  for (const reportsDir of candidateDirs) {
+    if (fs.existsSync(reportsDir)) {
+      try {
+        const subdirs = fs.readdirSync(reportsDir);
+        for (const sub of subdirs) {
+          const reportPath = path.join(reportsDir, sub, "report.json");
+          if (fs.existsSync(reportPath)) {
+            const stat = fs.statSync(reportPath);
+            if (!latestFile || stat.mtimeMs > latestFile.mtime) {
+              latestFile = { path: reportPath, mtime: stat.mtimeMs };
+            }
+          }
+        }
+      } catch (err) {
+        // ignore directory scan errors
+      }
+    }
+  }
+
+  if (latestFile) {
+    try {
+      const data = JSON.parse(fs.readFileSync(latestFile.path, "utf-8"));
+      return { report: data, path: latestFile.path, mtime: latestFile.mtime };
+    } catch (e) {
+      console.error("Error reading report JSON:", e);
+    }
+  }
+  return null;
+}
+
 function runNodeFallbackReport(execDir: string, plugin?: string, environment?: string, checkOnly?: boolean) {
   let features: any[] = [];
   try {
@@ -262,36 +301,8 @@ async function startServer() {
         return res.json(fallbackResult);
       }
 
-      let reportData = null;
-      try {
-        const candidateDirs = [
-          path.join(execDir, "reports"),
-          path.join(USER_DATA_DIR, "reports")
-        ];
-
-        let latestFile: { path: string; mtime: number } | null = null;
-
-        for (const reportsDir of candidateDirs) {
-          if (fs.existsSync(reportsDir)) {
-            const subdirs = fs.readdirSync(reportsDir);
-            for (const sub of subdirs) {
-              const latestReportPath = path.join(reportsDir, sub, "report.json");
-              if (fs.existsSync(latestReportPath)) {
-                const stat = fs.statSync(latestReportPath);
-                if (!latestFile || stat.mtimeMs > latestFile.mtime) {
-                  latestFile = { path: latestReportPath, mtime: stat.mtimeMs };
-                }
-              }
-            }
-          }
-        }
-
-        if (latestFile) {
-          reportData = JSON.parse(fs.readFileSync(latestFile.path, "utf-8"));
-        }
-      } catch (e) {
-        console.error("Error reading report JSON:", e);
-      }
+      const latestInfo = getLatestReportData(execDir);
+      const reportData = latestInfo?.report || null;
 
       const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
       // In the EmpMonitor framework, exit codes 0..3 correspond to standard test verdicts:
@@ -320,6 +331,28 @@ async function startServer() {
         report: reportData
       });
     });
+  });
+
+  // API to get latest execution report JSON
+  app.get("/api/report/latest", (req, res) => {
+    const execDir = getUnpackedPath(ROOT_DIR);
+    const latestInfo = getLatestReportData(execDir);
+    if (latestInfo) {
+      return res.json({ success: true, report: latestInfo.report, path: latestInfo.path, timestamp: latestInfo.mtime });
+    }
+    return res.status(404).json({ success: false, message: "No execution report found on disk." });
+  });
+
+  // API to download latest report.json
+  app.get("/api/report/download", (req, res) => {
+    const execDir = getUnpackedPath(ROOT_DIR);
+    const latestInfo = getLatestReportData(execDir);
+    if (latestInfo && fs.existsSync(latestInfo.path)) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="empmonitor-test-report.json"');
+      return fs.createReadStream(latestInfo.path).pipe(res);
+    }
+    return res.status(404).json({ error: "No report file found to download." });
   });
 
   // API to get feature profiles

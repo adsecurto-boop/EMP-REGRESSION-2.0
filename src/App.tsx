@@ -4,7 +4,8 @@ import {
   Server, Activity, ChevronRight, Monitor, Globe, Download, Github, Cpu, Radio, Sparkles,
   Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal, Filter, Search, ArrowUpCircle
 } from 'lucide-react';
-import { FeatureProfile } from './types';
+import { FeatureProfile, StructuredReport } from './types';
+import { ReportViewer } from './components/ReportViewer';
 
 interface DesktopStatus {
   environment: string;
@@ -73,6 +74,26 @@ export default function App() {
     exitCode: number;
     report: any;
   } | null>(null);
+
+  const [latestReport, setLatestReport] = useState<StructuredReport | null>(null);
+  const [isFetchingReport, setIsFetchingReport] = useState<boolean>(false);
+
+  const handleFetchLatestReport = async () => {
+    setIsFetchingReport(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/report/latest`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && data?.report) {
+          setLatestReport(data.report);
+        }
+      }
+    } catch (err) {
+      console.warn('Notice: Could not load latest report:', err);
+    } finally {
+      setIsFetchingReport(false);
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report' | 'logs'>('desktop');
   const [logs, setLogs] = useState<string>('');
@@ -272,6 +293,8 @@ export default function App() {
         setIsBackendReady(false);
       });
 
+    handleFetchLatestReport();
+
     // Listen to Electron IPC auto updater events if running inside Electron desktop app
     if ((window as any).electronAPI) {
       (window as any).electronAPI.getAppVersion().then((ver: string) => setAppVersion(ver));
@@ -313,7 +336,12 @@ export default function App() {
       .then((data) => {
         setRunResult(data);
         setIsRunning(false);
-        setActiveTab('console');
+        if (data?.report) {
+          setLatestReport(data.report);
+          setActiveTab('report');
+        } else {
+          setActiveTab('console');
+        }
       })
       .catch((err) => {
         console.error(err);
@@ -754,8 +782,27 @@ export default function App() {
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              <FileText className="w-4 h-4" />
-              <span>Structured Report</span>
+              <FileText className="w-4 h-4 text-indigo-400" />
+              <span>Detailed Test Report</span>
+              {(runResult?.report?.summary || latestReport?.summary) && (() => {
+                const s = runResult?.report?.summary || latestReport?.summary;
+                const v = s.overall_verdict;
+                return (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono border ${
+                      v === 'FAILED'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        : v === 'BLOCKED'
+                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                        : v === 'INCONCLUSIVE'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}
+                  >
+                    {v} ({s.total_findings || 0})
+                  </span>
+                );
+              })()}
             </button>
             <button
               onClick={() => setActiveTab('logs')}
@@ -1130,6 +1177,15 @@ export default function App() {
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Console Execution Output</h3>
                   {runResult && (
                     <div className="flex items-center space-x-2">
+                      {runResult.report && (
+                        <button
+                          onClick={() => setActiveTab('report')}
+                          className="flex items-center space-x-1.5 px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded text-xs font-semibold transition"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>View Full Test Report</span>
+                        </button>
+                      )}
                       {runResult.report?.summary?.overall_verdict && (
                         <span
                           className={`px-2.5 py-1 rounded text-xs font-bold font-mono uppercase ${
@@ -1187,44 +1243,12 @@ export default function App() {
             )}
 
             {activeTab === 'report' && (
-              <div className="space-y-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parsed Execution Report</h3>
-                {runResult?.report ? (
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b border-slate-800">
-                      <div>
-                        <div className="text-xs text-slate-400">Overall Verdict</div>
-                        <div className="text-lg font-bold text-indigo-400">{runResult.report.summary?.overall_verdict || 'N/A'}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-400">Confidence</div>
-                        <div className="text-lg font-bold text-slate-200">{runResult.report.summary?.lowest_confidence || 'N/A'}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-400">Total Findings</div>
-                        <div className="text-lg font-bold text-slate-200">{runResult.report.summary?.total_findings ?? 0}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-400">Layers Covered</div>
-                        <div className="text-xs text-slate-300 mt-1">
-                          {runResult.report.summary?.layers_covered?.map((l: any) => l.label).join(', ') || 'None'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-400 mb-2">Raw JSON Output</h4>
-                      <pre className="bg-slate-950 p-4 rounded-lg text-xs font-mono text-slate-300 overflow-x-auto border border-slate-800">
-                        {JSON.stringify(runResult.report, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
-                    No structured report available for this run. Run a full suite to view detailed findings.
-                  </div>
-                )}
-              </div>
+              <ReportViewer
+                report={runResult?.report || latestReport}
+                onRefreshLatest={handleFetchLatestReport}
+                onRunSuite={() => handleRunFramework(false)}
+                isLoading={isRunning || isFetchingReport}
+              />
             )}
 
             {activeTab === 'logs' && (() => {
