@@ -784,9 +784,10 @@ export default function App() {
             >
               <FileText className="w-4 h-4 text-indigo-400" />
               <span>Detailed Test Report</span>
-              {(runResult?.report?.summary || latestReport?.summary) && (() => {
+              {(runResult?.report?.summary || latestReport?.summary || runResult?.report) && (() => {
                 const s = runResult?.report?.summary || latestReport?.summary;
-                const v = s.overall_verdict;
+                const v = s?.overall_verdict || (s as any)?.verdict || (runResult?.report as any)?.verdict || 'HEALTHY';
+                const total = s?.total_findings ?? (s as any)?.total_plugins ?? 0;
                 return (
                   <span
                     className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono border ${
@@ -799,7 +800,7 @@ export default function App() {
                         : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                     }`}
                   >
-                    {v} ({s.total_findings || 0})
+                    {v} ({total})
                   </span>
                 );
               })()}
@@ -1103,7 +1104,7 @@ export default function App() {
                     ) : chromeOutput ? (
                       <>
                         <div className="text-emerald-400 font-semibold mb-2">
-                          Executed: {chromeOutput.scriptExecuted || selectedScript}
+                          Executed: {(chromeOutput as any).scriptExecuted || selectedScript}
                         </div>
                         {chromeOutput.stdout || <span className="text-slate-500">Script completed with no stdout output.</span>}
                         {chromeOutput.stderr && (
@@ -1246,7 +1247,7 @@ export default function App() {
               <ReportViewer
                 report={runResult?.report || latestReport}
                 onRefreshLatest={handleFetchLatestReport}
-                onRunSuite={() => handleRunFramework(false)}
+                onRunSuite={() => handleRun(false)}
                 isLoading={isRunning || isFetchingReport}
               />
             )}

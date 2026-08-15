@@ -102,18 +102,90 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
+  // Safely normalized metadata
+  const metadata = useMemo(() => {
+    return {
+      execution_id: report?.metadata?.execution_id || 'exec_current',
+      generated_at: report?.metadata?.generated_at || new Date().toISOString(),
+      environment: report?.metadata?.environment || 'local',
+      framework_name: report?.metadata?.framework_name || 'empaf',
+      framework_version: report?.metadata?.framework_version || '0.1.0',
+      validation_standard_version: report?.metadata?.validation_standard_version || '1.0.0',
+      host: report?.metadata?.host || 'local',
+      organization: report?.metadata?.organization || 'EmpMonitor QA',
+    };
+  }, [report]);
+
   // Flatten all findings across sections for unified searching and filtering
   const allFindings = useMemo(() => {
-    if (!report?.sections) return [];
+    if (!report) return [];
     const list: { finding: FindingRecord; sectionTitle: string; index: number }[] = [];
     let idx = 0;
-    report.sections.forEach((sec) => {
-      sec.findings?.forEach((f) => {
-        list.push({ finding: f, sectionTitle: sec.title, index: idx++ });
+
+    if (Array.isArray(report.sections)) {
+      report.sections.forEach((sec) => {
+        sec.findings?.forEach((f) => {
+          list.push({ finding: f, sectionTitle: sec.title || 'General', index: idx++ });
+        });
       });
-    });
+    } else if (Array.isArray((report as any).results)) {
+      (report as any).results.forEach((res: any) => {
+        if (Array.isArray(res.assertions)) {
+          res.assertions.forEach((ass: any, aIdx: number) => {
+            list.push({
+              finding: {
+                what: ass.name || `Assertion ${aIdx + 1}`,
+                where: `Host (${res.plugin_id || res.name || 'Core'})`,
+                why: ass.pass ? 'Assertion passed validation checks.' : (ass.error || 'Assertion failed.'),
+                verdict: ass.pass ? 'HEALTHY' : 'FAILED',
+                confidence: 'HIGH',
+                corroboration: ['L1', 'L2'],
+                evidence_ids: [`EV-${(res.plugin_id || 'COR').slice(0, 3).toUpperCase()}-${aIdx + 1}`],
+              },
+              sectionTitle: res.name || res.plugin_id || 'Core',
+              index: idx++,
+            });
+          });
+        }
+      });
+    }
+
     return list;
   }, [report]);
+
+  // Safely normalized summary
+  const summary = useMemo(() => {
+    const rawSum = report?.summary;
+    const total = rawSum?.total_findings ?? allFindings.length;
+    const failed = rawSum?.failed ?? allFindings.filter((f) => f.finding.verdict === 'FAILED').length;
+    const blocked = rawSum?.blocked ?? allFindings.filter((f) => f.finding.verdict === 'BLOCKED').length;
+    const inconclusive = rawSum?.inconclusive ?? allFindings.filter((f) => f.finding.verdict === 'INCONCLUSIVE').length;
+    const degraded = rawSum?.degraded ?? allFindings.filter((f) => f.finding.verdict === 'DEGRADED').length;
+    const healthy = rawSum?.healthy ?? Math.max(0, total - failed - blocked - inconclusive - degraded);
+
+    let ov = rawSum?.overall_verdict || (rawSum as any)?.verdict || (report as any)?.verdict;
+    if (!ov) {
+      if (failed > 0) ov = 'FAILED';
+      else if (blocked > 0) ov = 'BLOCKED';
+      else if (inconclusive > 0) ov = 'INCONCLUSIVE';
+      else if (degraded > 0) ov = 'DEGRADED';
+      else ov = 'HEALTHY';
+    }
+
+    return {
+      overall_verdict: ov,
+      lowest_confidence: rawSum?.lowest_confidence || (report as any)?.confidence || 'HIGH',
+      total_findings: total,
+      healthy: Math.max(0, healthy),
+      degraded: Math.max(0, degraded),
+      failed: Math.max(0, failed),
+      inconclusive: Math.max(0, inconclusive),
+      blocked: Math.max(0, blocked),
+      layers_covered: rawSum?.layers_covered || ['L1', 'L2', 'L3', 'L4'],
+      failure_classes: rawSum?.failure_classes || {},
+      duration_seconds: rawSum?.duration_seconds,
+    };
+  }, [report, allFindings]);
 
   const pluginNames = useMemo(() => {
     if (!report?.sections) return [];
@@ -160,20 +232,19 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
 
   const handleCopyBugSummary = () => {
     if (!report) return;
-    const summary = report.summary;
     const failedFindings = allFindings.filter((f) => f.finding.verdict === 'FAILED' || f.finding.verdict === 'BLOCKED');
 
     const markdown = [
       `# EmpMonitor Test Execution Report`,
       `**Verdict:** ${summary.overall_verdict} (${summary.lowest_confidence} Confidence)`,
-      `**Execution ID:** ${report.metadata.execution_id}`,
-      `**Environment:** ${report.metadata.environment}`,
-      `**Timestamp:** ${report.metadata.generated_at}`,
+      `**Execution ID:** ${metadata.execution_id}`,
+      `**Environment:** ${metadata.environment}`,
+      `**Timestamp:** ${metadata.generated_at}`,
       `**Total Findings:** ${summary.total_findings} (Failed: ${summary.failed}, Blocked: ${summary.blocked}, Inconclusive: ${summary.inconclusive}, Healthy: ${summary.healthy})`,
       `\n## Defect & Failure Breakdown:`,
       ...failedFindings.map(
         ({ finding, sectionTitle }, i) =>
-          `\n### ${i + 1}. [${finding.verdict}] ${finding.what}\n- **Plugin:** ${sectionTitle}\n- **Location (Where):** \`${finding.where}\`\n- **Root Cause (Why):** ${finding.why}\n- **Evidence IDs:** ${finding.evidence_ids.join(', ') || 'N/A'}\n- **Failure Class:** ${finding.failure_class || 'None'}\n${
+          `\n### ${i + 1}. [${finding.verdict}] ${finding.what}\n- **Plugin:** ${sectionTitle}\n- **Location (Where):** \`${finding.where}\`\n- **Root Cause (Why):** ${finding.why}\n- **Evidence IDs:** ${finding.evidence_ids?.join(', ') || 'N/A'}\n- **Failure Class:** ${finding.failure_class || 'None'}\n${
             finding.notes?.length ? `- **Notes:** ${finding.notes.join('; ')}` : ''
           }`
       ),
@@ -190,7 +261,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `empmonitor-report-${report.metadata.execution_id.slice(0, 8)}.json`;
+    a.download = `empmonitor-report-${(metadata.execution_id || 'test').slice(0, 8)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -235,7 +306,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     );
   }
 
-  const verdictMeta = VERDICT_CONFIG[report.summary.overall_verdict] || VERDICT_CONFIG.INCONCLUSIVE;
+  const verdictMeta = VERDICT_CONFIG[summary.overall_verdict] || VERDICT_CONFIG.INCONCLUSIVE;
   const VerdictIcon = verdictMeta.icon;
 
   return (
@@ -261,10 +332,10 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
                   {verdictMeta.label}
                 </span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-900/80 text-slate-300 border border-slate-700/50">
-                  Confidence: <span className="text-indigo-300">{report.summary.lowest_confidence}</span>
+                  Confidence: <span className="text-indigo-300">{summary.lowest_confidence}</span>
                 </span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-slate-900/80 text-slate-400 border border-slate-700/50">
-                  Env: <span className="text-slate-200 font-semibold">{report.metadata.environment || 'local'}</span>
+                  Env: <span className="text-slate-200 font-semibold">{metadata.environment || 'local'}</span>
                 </span>
               </div>
               <p className="text-xs text-slate-300 font-medium">
@@ -297,23 +368,23 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-5 pt-4 border-t border-slate-800/80 text-xs">
           <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800/60">
             <div className="text-[11px] text-slate-400 font-medium">Total Assertions</div>
-            <div className="text-lg font-bold text-slate-100">{report.summary.total_findings}</div>
+            <div className="text-lg font-bold text-slate-100">{summary.total_findings}</div>
           </div>
           <div className="bg-rose-950/30 rounded-lg p-2.5 border border-rose-800/30">
             <div className="text-[11px] text-rose-300/80 font-medium">Failed</div>
-            <div className="text-lg font-bold text-rose-400">{report.summary.failed}</div>
+            <div className="text-lg font-bold text-rose-400">{summary.failed}</div>
           </div>
           <div className="bg-amber-950/30 rounded-lg p-2.5 border border-amber-800/30">
             <div className="text-[11px] text-amber-300/80 font-medium">Inconclusive</div>
-            <div className="text-lg font-bold text-amber-400">{report.summary.inconclusive}</div>
+            <div className="text-lg font-bold text-amber-400">{summary.inconclusive}</div>
           </div>
           <div className="bg-purple-950/30 rounded-lg p-2.5 border border-purple-800/30">
             <div className="text-[11px] text-purple-300/80 font-medium">Blocked</div>
-            <div className="text-lg font-bold text-purple-300">{report.summary.blocked}</div>
+            <div className="text-lg font-bold text-purple-300">{summary.blocked}</div>
           </div>
           <div className="bg-emerald-950/30 rounded-lg p-2.5 border border-emerald-800/30">
             <div className="text-[11px] text-emerald-300/80 font-medium">Healthy (Passed)</div>
-            <div className="text-lg font-bold text-emerald-400">{report.summary.healthy}</div>
+            <div className="text-lg font-bold text-emerald-400">{summary.healthy}</div>
           </div>
         </div>
       </div>
@@ -328,8 +399,8 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             {Object.entries(LAYER_LABELS).map(([layerKey, layerInfo]) => {
-              const isCovered = (report.summary.layers_covered || []).some((l: any) =>
-                typeof l === 'string' ? l === layerKey : l.label === layerKey || l.id === layerKey
+              const isCovered = (summary.layers_covered || []).some((l: any) =>
+                typeof l === 'string' ? l === layerKey : l?.label === layerKey || l?.id === layerKey
               );
               return (
                 <div
@@ -357,9 +428,9 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
             <ShieldAlert className="w-4 h-4 text-rose-400" />
             <span>Defect Classifications</span>
           </div>
-          {Object.keys(report.summary.failure_classes || {}).length > 0 ? (
+          {Object.keys(summary.failure_classes || {}).length > 0 ? (
             <div className="space-y-2">
-              {Object.entries(report.summary.failure_classes).map(([defectClass, count]) => (
+              {Object.entries(summary.failure_classes).map(([defectClass, count]) => (
                 <div
                   key={defectClass}
                   className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800/80 text-xs"
@@ -671,50 +742,88 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
         </h3>
 
         <div className="space-y-3">
-          {report.sections?.map((section) => {
-            const isSecExpanded = expandedSections[section.title] !== false;
-            const secVerdictMeta = VERDICT_CONFIG[section.verdict] || VERDICT_CONFIG.INCONCLUSIVE;
+          {(report.sections || []).length > 0 ? (
+            report.sections?.map((section) => {
+              const isSecExpanded = expandedSections[section.title] !== false;
+              const secVerdictMeta = VERDICT_CONFIG[section.verdict] || VERDICT_CONFIG.INCONCLUSIVE;
 
-            return (
-              <div
-                key={section.title}
-                className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
-              >
+              return (
                 <div
-                  onClick={() => toggleSectionExpand(section.title)}
-                  className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
+                  key={section.title}
+                  className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="font-mono text-sm font-bold text-indigo-400">{section.title}</span>
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
-                    >
-                      {section.verdict}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">
-                      Status: <strong className="text-slate-200">{section.status}</strong>
-                    </span>
+                  <div
+                    onClick={() => toggleSectionExpand(section.title)}
+                    className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="font-mono text-sm font-bold text-indigo-400">{section.title}</span>
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
+                      >
+                        {section.verdict}
+                      </span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        Status: <strong className="text-slate-200">{section.status}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-3 text-xs text-slate-400">
+                      <span>{section.findings?.length ?? 0} assertions</span>
+                      {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 text-xs text-slate-400">
-                    <span>{section.findings?.length ?? 0} assertions</span>
-                    {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  {isSecExpanded && section.metadata && Object.keys(section.metadata).length > 0 && (
+                    <div className="p-4 bg-slate-950/60 border-t border-slate-800 text-xs space-y-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Observed Host Inspection Telemetry
+                      </div>
+                      <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-48 border border-slate-800">
+                        {JSON.stringify(section.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : Array.isArray((report as any).results) ? (
+            (report as any).results.map((res: any) => {
+              const secTitle = res.name || res.plugin_id || 'Plugin';
+              const isSecExpanded = expandedSections[secTitle] !== false;
+              const secVerdictMeta = VERDICT_CONFIG[res.verdict] || VERDICT_CONFIG.HEALTHY;
+
+              return (
+                <div
+                  key={secTitle}
+                  className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+                >
+                  <div
+                    onClick={() => toggleSectionExpand(secTitle)}
+                    className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="font-mono text-sm font-bold text-indigo-400">{secTitle}</span>
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
+                      >
+                        {res.verdict || 'HEALTHY'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-3 text-xs text-slate-400">
+                      <span>{res.assertions?.length ?? 0} assertions</span>
+                      {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </div>
                   </div>
                 </div>
-
-                {isSecExpanded && section.metadata && Object.keys(section.metadata).length > 0 && (
-                  <div className="p-4 bg-slate-950/60 border-t border-slate-800 text-xs space-y-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Observed Host Inspection Telemetry
-                    </div>
-                    <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-48 border border-slate-800">
-                      {JSON.stringify(section.metadata, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="p-4 bg-slate-950/40 rounded-lg text-center text-xs text-slate-400">
+              No section-level plugin breakdown available.
+            </div>
+          )}
         </div>
       </div>
     </div>
