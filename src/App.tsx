@@ -1129,15 +1129,38 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Console Execution Output</h3>
                   {runResult && (
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                        runResult.exitCode === 0
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-amber-500/10 text-amber-400'
-                      }`}
-                    >
-                      Exit Code: {runResult.exitCode}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      {runResult.report?.summary?.overall_verdict && (
+                        <span
+                          className={`px-2.5 py-1 rounded text-xs font-bold font-mono uppercase ${
+                            runResult.report.summary.overall_verdict === 'HEALTHY'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : runResult.report.summary.overall_verdict === 'DEGRADED'
+                              ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+                              : runResult.report.summary.overall_verdict === 'FAILED'
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                              : runResult.report.summary.overall_verdict === 'BLOCKED'
+                              ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                          }`}
+                        >
+                          {runResult.report.summary.overall_verdict}
+                        </span>
+                      )}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                          runResult.exitCode === 0
+                            ? 'bg-emerald-500/10 text-emerald-400'
+                            : runResult.exitCode === 1
+                            ? 'bg-rose-500/10 text-rose-400'
+                            : runResult.exitCode === 2 || runResult.exitCode === 3
+                            ? 'bg-amber-500/10 text-amber-400'
+                            : 'bg-red-500/20 text-red-300'
+                        }`}
+                      >
+                        Exit Code: {runResult.exitCode}
+                      </span>
+                    </div>
                   )}
                 </div>
 

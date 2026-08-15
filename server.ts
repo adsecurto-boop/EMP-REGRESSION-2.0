@@ -293,19 +293,30 @@ async function startServer() {
         console.error("Error reading report JSON:", e);
       }
 
-      const isSuccess = !error || error.code === 0;
+      const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
+      // In the EmpMonitor framework, exit codes 0..3 correspond to standard test verdicts:
+      // 0 = HEALTHY/DEGRADED, 1 = FAILED, 2 = INCONCLUSIVE, 3 = BLOCKED.
+      // Exit code 4 represents framework startup or fatal system errors.
+      const executionCompleted = reportData !== null || exitCode <= 3;
+      const isFatalError = error && exitCode >= 4 && !reportData;
+
       writeLogEntry(
-        isSuccess ? "SUCCESS" : "ERROR",
+        isFatalError ? "ERROR" : "SUCCESS",
         "RUN_SUITE",
-        `Execution finished with exit code ${error ? (typeof error.code === "number" ? error.code : 1) : 0}`,
-        { success: isSuccess, stderrSummary: stderr ? stderr.slice(0, 150) : "None" }
+        `Execution finished: exit code ${exitCode} (${reportData?.summary?.overall_verdict || "Completed"})`,
+        {
+          exitCode,
+          verdict: reportData?.summary?.overall_verdict || null,
+          totalFindings: reportData?.summary?.total_findings ?? null,
+          stderrSummary: stderr ? stderr.slice(0, 150) : "None"
+        }
       );
 
       res.json({
-        success: isSuccess,
-        exitCode: error ? (typeof error.code === "number" ? error.code : 1) : 0,
+        success: executionCompleted,
+        exitCode,
         stdout,
-        stderr: stderr || (error ? error.message : ""),
+        stderr: stderr || (isFatalError ? error.message : ""),
         report: reportData
       });
     });
