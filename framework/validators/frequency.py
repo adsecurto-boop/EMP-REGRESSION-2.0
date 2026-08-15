@@ -14,8 +14,9 @@ from framework.shared.interfaces import Validator
 from framework.shared.models import (
     Confidence,
     Evidence,
+    EvidenceLayer,
+    FailureClass,
     Finding,
-    FindingClass,
     ValidationContext,
     Verdict,
 )
@@ -74,13 +75,16 @@ class ScreenshotFrequencyValidator:
 class ScreenshotCadenceValidator(Validator):
     """Framework Validator implementing cross-layer cadence verification for EM010_Screenshots."""
 
-    name = "validator.screenshots.cadence"
-
     def __init__(self, *, tolerance_seconds: int = 15):
+        self._tolerance_seconds = tolerance_seconds
         self.frequency_validator = ScreenshotFrequencyValidator(tolerance_seconds=tolerance_seconds)
 
+    @property
+    def name(self) -> str:
+        return "validator.screenshots.cadence"
+
     def validate(
-        self, context: ValidationContext, evidence: Sequence[Evidence]
+        self, context: ValidationContext
     ) -> Sequence[Finding]:
         expected_interval_sec = 60
         mock_titles = [
@@ -95,22 +99,30 @@ class ScreenshotCadenceValidator(Validator):
             timestamps=parsed,
         )
 
-        return (
-            Finding(
-                finding_id="F-EM010-CADENCE-01",
-                feature_id="EM010_Screenshots",
-                verdict=Verdict.HEALTHY if is_healthy else Verdict.DEGRADED,
-                confidence=Confidence.HIGH,
-                finding_class=FindingClass.BEHAVIORAL,
-                what="Screenshot capture and upload cadence validation (1-minute interval)",
-                where="L1 Config -> L2 SQLite -> L3 Ingestion -> L4 Dashboard",
-                why=(
-                    f"Correlated consecutive screenshot timestamps with expected {expected_interval_sec}s interval. "
-                    f"Max measured drift: {max([d['drift_sec'] for d in drift_log], default=0):.1f}s within ±{self.frequency_validator.tolerance}s tolerance."
-                ),
-                corroboration=("L1", "L2", "L3", "L4"),
-                evidence_ids=tuple(e.evidence_id for e in evidence if e.evidence_id.startswith("EV-")),
-                failure_class=None if is_healthy else "capture interval drifts from configuration",
-                notes=tuple(f"Cycle {d['from']} -> {d['to']}: {d['actual_interval_sec']}s ({d['status']})" for d in drift_log),
+        evidence_list = [
+            e for e in context.evidence
+            if getattr(e, "evidence_id", "").startswith("EV-")
+        ]
+
+        if not evidence_list:
+            return ()
+
+        verdict = Verdict.HEALTHY if is_healthy else Verdict.DEGRADED
+        max_drift = max([d['drift_sec'] for d in drift_log], default=0)
+
+        finding = Finding.build(
+            what="Screenshot capture and upload cadence validation (1-minute interval)",
+            where_layer=EvidenceLayer.DASHBOARD,
+            where_component="cadence.validator",
+            why=(
+                f"Correlated consecutive screenshot timestamps with expected {expected_interval_sec}s interval. "
+                f"Max measured drift: {max_drift:.1f}s within ±{self._tolerance_seconds}s tolerance."
             ),
+            evidence=evidence_list,
+            verdict=verdict,
+            failure_class=None if is_healthy else FailureClass.CAPTURE_RUNTIME_DEFECT,
+            plugin_id=context.plugin_id,
+            minimum_layers=context.minimum_layers,
+            notes=tuple(f"Cycle {d['from']} -> {d['to']}: {d['actual_interval_sec']}s ({d['status']})" for d in drift_log),
         )
+        return (finding,)
