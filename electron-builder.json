@@ -49,6 +49,6 @@
   },
   "publish": {
     "provider": "generic",
-    "url": "https://updates.yourdomain.com/"
+    "url": "https://pub-5b4a3679d3c849308251344960fa750e.r2.dev/"
   }
 }

@@ -215,7 +215,7 @@ export default function App() {
         setToast({
           id: Date.now().toString(),
           title: 'Cloudflare R2 Update Check Initiated',
-          message: res?.message || 'Connecting to Cloudflare R2 update feed (https://updates.yourdomain.com)...',
+          message: res?.message || 'Connecting to Cloudflare R2 update feed (https://pub-5b4a3679d3c849308251344960fa750e.r2.dev)...',
           type: 'info',
           working: true,
           timestamp: new Date().toLocaleTimeString(),
@@ -227,7 +227,7 @@ export default function App() {
           body: JSON.stringify({
             level: 'INFO',
             category: 'AUTO_UPDATE',
-            message: 'Manual auto-update check initiated against Cloudflare R2 feed (https://updates.yourdomain.com)',
+            message: 'Manual auto-update check initiated against Cloudflare R2 feed (https://pub-5b4a3679d3c849308251344960fa750e.r2.dev)',
             details: { appVersion, provider: 'Cloudflare R2', environment: 'Web Preview Engine' }
           })
         });
@@ -533,7 +533,7 @@ export default function App() {
     setUpdateProgress(0);
     setUpdateLogs([]);
     const simulateError = forceError || shouldSimulateError;
-    const r2Url = jenkinsInfo?.r2Release?.baseUrl || 'https://updates.yourdomain.com';
+    const r2Url = jenkinsInfo?.r2Release?.baseUrl || 'https://pub-5b4a3679d3c849308251344960fa750e.r2.dev';
 
     await appendUpdateLog('INFO', `Auto-updater sequence initiated for v${appVersion}.`, `Target Provider: Cloudflare R2 Generic Feed (${r2Url})`);
     setUpdateStage('Resolving Cloudflare R2 Anycast CDN Edge...');
@@ -552,13 +552,13 @@ export default function App() {
       
       await new Promise(r => setTimeout(r, 600));
       setUpdateProgress(35);
-      await appendUpdateLog('ERROR', 'ERR_UPDATER_R2_FEED_UNREACHABLE: Failed to fetch latest.yml from Cloudflare R2.', 'Diagnostic Hint: Verify DNS resolution order (--dns-result-order=ipv4first) and verify public access policies on bucket s3://empmonitor-updates.');
+      await appendUpdateLog('ERROR', 'ERR_UPDATER_R2_FEED_UNREACHABLE: Failed to fetch latest.yml from Cloudflare R2.', 'Diagnostic Hint: Verify DNS resolution order (--dns-result-order=ipv4first) and verify public access policies on bucket s3://emp-regression-suite.');
       
       setUpdaterState({
         status: 'error',
         working: false,
         error: 'ERR_UPDATER_R2_FEED_UNREACHABLE: 404 / Network Timeout',
-        message: 'Auto-Update Error: Failed to resolve Cloudflare R2 feed (https://updates.yourdomain.com).'
+        message: 'Auto-Update Error: Failed to resolve Cloudflare R2 feed (https://pub-5b4a3679d3c849308251344960fa750e.r2.dev).'
       });
       setToast({
         id: Date.now().toString(),
@@ -1107,11 +1107,11 @@ export default function App() {
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-800">
                         <span className="text-slate-400">R2 Bucket</span>
-                        <span className="text-indigo-400 font-mono font-medium">s3://empmonitor-updates</span>
+                        <span className="text-indigo-400 font-mono font-medium">s3://emp-regression-suite</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Custom Domain</span>
-                        <span className="text-cyan-300 font-mono">https://updates.yourdomain.com</span>
+                        <span className="text-slate-400">Public R2 URL</span>
+                        <span className="text-cyan-300 font-mono">https://pub-5b4a3679d3c849308251344960fa750e.r2.dev</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
                         <span className="text-slate-400">Packaging Engine</span>
@@ -1126,8 +1126,8 @@ export default function App() {
                   <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How Cloudflare R2 Auto-Updates Work</h4>
                   <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2 leading-relaxed">
                     <li><strong className="text-slate-200">Continuous Packaging in Jenkins:</strong> On git commit tag, Jenkins runs <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npm run build</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">electron-builder -c.npmRebuild=false --publish never</code> to produce Windows installers and portable binaries.</li>
-                    <li><strong className="text-slate-200">Cloudflare R2 Synchronization:</strong> Jenkins synchronizes <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">dist-electron/*</code> to <code className="text-cyan-400 bg-slate-800 px-1.5 py-0.5 rounded">s3://empmonitor-updates/</code> using S3 credentials (<code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">cloudflare-r2-creds</code>) with zero egress bandwidth charges.</li>
-                    <li><strong className="text-slate-200">Global Edge Updates:</strong> The EmpMonitor desktop client checks <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">https://updates.yourdomain.com/latest.yml</code> via Cloudflare CDN and seamlessly stages background updates.</li>
+                    <li><strong className="text-slate-200">Cloudflare R2 Synchronization:</strong> Jenkins synchronizes <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">dist-electron/*</code> to <code className="text-cyan-400 bg-slate-800 px-1.5 py-0.5 rounded">s3://emp-regression-suite/</code> using S3 credentials (<code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">cloudflare-r2-creds</code>) with zero egress bandwidth charges.</li>
+                    <li><strong className="text-slate-200">Global Edge Updates:</strong> The EmpMonitor desktop client checks <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">https://pub-5b4a3679d3c849308251344960fa750e.r2.dev/latest.yml</code> via Cloudflare CDN and seamlessly stages background updates.</li>
                   </ol>
                 </div>
               </div>

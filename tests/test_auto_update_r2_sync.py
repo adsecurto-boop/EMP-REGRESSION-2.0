@@ -46,7 +46,7 @@ UPDATER_LOG_PATH = Path(APPDATA_PATH) / "screen" / "empmonitor_updater.log"
 AUTH_FILE = "playwright-profile/auth.json"
 
 # Production R2 Distribution Constants
-EXPECTED_BASE_URL = os.getenv("EMPM_UPDATE_BASE_URL", "https://updates.yourdomain.com")
+EXPECTED_BASE_URL = os.getenv("EMPM_UPDATE_BASE_URL", "https://pub-5b4a3679d3c849308251344960fa750e.r2.dev")
 EXPECTED_MANIFEST_URL = f"{EXPECTED_BASE_URL.rstrip('/')}/latest.json"
 REPORTS_DIR = Path("reports")
 

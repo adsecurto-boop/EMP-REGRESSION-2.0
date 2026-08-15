@@ -59,8 +59,8 @@ export const AutoUpdateSection: React.FC<AutoUpdateSectionProps> = ({
   const [selectedCodeSnippet, setSelectedCodeSnippet] = useState<'cli' | 'jenkins' | 'node' | 'python'>('cli');
 
   const r2AccountId = jenkinsInfo?.r2Release?.accountId || 'ca2a4c1cb15c70abc670f34aecbd5084';
-  const r2BaseUrl = jenkinsInfo?.r2Release?.baseUrl || 'https://updates.yourdomain.com';
-  const r2Bucket = jenkinsInfo?.r2Release?.bucket || 'empmonitor-updates';
+  const r2BaseUrl = jenkinsInfo?.r2Release?.baseUrl || 'https://pub-5b4a3679d3c849308251344960fa750e.r2.dev';
+  const r2Bucket = jenkinsInfo?.r2Release?.bucket || 'emp-regression-suite';
 
   const jurisdictionEndpoints = {
     default: {
@@ -727,7 +727,7 @@ s3 = boto3.client(
               <span>3. Cloudflare R2 S3 Sync</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Pipeline synchronizes artifacts to <code className="text-cyan-300 font-mono text-[10px]">s3://empmonitor-updates</code> using AWS CLI / S3 API with zero egress fees and instant CDN edge propagation.
+              Pipeline synchronizes artifacts to <code className="text-cyan-300 font-mono text-[10px]">s3://emp-regression-suite</code> using S3 API with zero egress fees and instant CDN edge propagation.
             </p>
           </div>
         </div>
@@ -742,7 +742,7 @@ s3 = boto3.client(
               { name: "Build Web & Backend Server", status: "SUCCESS", duration: "18s", notes: "Compiled Vite client and standalone server.cjs" },
               { name: "Extract App Version", status: "SUCCESS", duration: "1s", notes: `Detected v${appVersion}` },
               { name: "Package Desktop EXE", status: "SUCCESS", duration: "65s", notes: "Bundled installer & portable binary with sha512 checksums (-c.npmRebuild=false)" },
-              { name: "Publish to Cloudflare R2", status: "SUCCESS", duration: "14s", notes: "Synchronized dist-electron/* to s3://empmonitor-updates with public-read ACL" },
+              { name: "Publish to Cloudflare R2", status: "SUCCESS", duration: "14s", notes: "Synchronized dist-electron/* to s3://emp-regression-suite with public-read ACL" },
               { name: "Archive Artifacts", status: "SUCCESS", duration: "8s", notes: "Archived dist-electron/*.exe, latest.yml & latest.json" }
             ]).map((stg: any, i: number) => (
               <div key={i} className="flex items-center justify-between py-2 px-3 bg-slate-900/60 rounded-lg border border-slate-800/80 text-xs">

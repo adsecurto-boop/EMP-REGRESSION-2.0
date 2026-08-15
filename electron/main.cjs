@@ -83,7 +83,7 @@ autoUpdater.logger = autoUpdateLogger;
 autoUpdater.autoDownload = true;
 
 // Configure Cloudflare R2 Generic Auto-Update Feed
-const R2_UPDATE_FEED = process.env.EMPM_UPDATE_BASE_URL || 'https://updates.yourdomain.com';
+const R2_UPDATE_FEED = process.env.EMPM_UPDATE_BASE_URL || 'https://pub-5b4a3679d3c849308251344960fa750e.r2.dev';
 try {
   autoUpdater.setFeedURL({
     provider: 'generic',

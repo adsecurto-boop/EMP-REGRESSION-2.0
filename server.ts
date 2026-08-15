@@ -506,9 +506,9 @@ async function startServer() {
       recordingsAvailable: recordingsCount,
       githubRepo: "adsecurto-boop/EMP-REGRESSION-2.0",
       autoUpdaterProvider: "Cloudflare R2 (S3-Compatible CDN / Generic Provider)",
-      r2Bucket: "empmonitor-updates",
+      r2Bucket: "emp-regression-suite",
       r2AccountId: "ca2a4c1cb15c70abc670f34aecbd5084",
-      r2Endpoint: "https://updates.yourdomain.com",
+      r2Endpoint: "https://pub-5b4a3679d3c849308251344960fa750e.r2.dev",
       r2Jurisdictions: {
         default: {
           name: "Default (Global)",
@@ -597,7 +597,7 @@ async function startServer() {
 
     const buildNumber = 42;
     const releaseTag = `v${pkgVersion}`;
-    const r2BaseUrl = process.env.EMPM_UPDATE_BASE_URL || "https://updates.yourdomain.com";
+    const r2BaseUrl = process.env.EMPM_UPDATE_BASE_URL || "https://pub-5b4a3679d3c849308251344960fa750e.r2.dev";
 
     res.json({
       success: true,
@@ -613,7 +613,7 @@ async function startServer() {
           { name: "Build Web & Backend Server", status: "SUCCESS", duration: "18s", notes: "Compiled Vite client and standalone server.cjs" },
           { name: "Extract App Version", status: "SUCCESS", duration: "1s", notes: `Detected ${releaseTag}` },
           { name: "Package Desktop EXE", status: "SUCCESS", duration: "65s", notes: "Bundled installer & portable binary with sha512 checksums (-c.npmRebuild=false)" },
-          { name: "Publish to Cloudflare R2", status: "SUCCESS", duration: "14s", notes: "Synchronized dist-electron/* to s3://empmonitor-updates with public-read ACL" },
+          { name: "Publish to Cloudflare R2", status: "SUCCESS", duration: "14s", notes: "Synchronized dist-electron/* to s3://emp-regression-suite with public-read ACL" },
           { name: "Archive Artifacts", status: "SUCCESS", duration: "8s", notes: "Archived dist-electron/*.exe, latest.yml & latest.json" }
         ],
         gitBuildData: {
@@ -625,7 +625,7 @@ async function startServer() {
         }
       },
       r2Release: {
-        bucket: "empmonitor-updates",
+        bucket: "emp-regression-suite",
         accountId: "ca2a4c1cb15c70abc670f34aecbd5084",
         baseUrl: r2BaseUrl,
         jurisdictions: {
@@ -658,12 +658,12 @@ async function startServer() {
       },
       autoUpdaterStatus: {
         provider: "generic",
-        r2Bucket: "empmonitor-updates",
+        r2Bucket: "emp-regression-suite",
         feedUrl: r2BaseUrl,
         channel: "latest",
         protocol: "HTTPS / Cloudflare R2 S3-Compatible Edge CDN",
         readyForClientAutoUpdate: true,
-        verificationSummary: `Jenkins build #${buildNumber} successfully packaged and synchronized ${releaseTag} to Cloudflare R2 bucket (s3://empmonitor-updates). Auto-updater client queries ${r2BaseUrl}/latest.yml for instant edge downloads.`
+        verificationSummary: `Jenkins build #${buildNumber} successfully packaged and synchronized ${releaseTag} to Cloudflare R2 bucket (s3://emp-regression-suite). Auto-updater client queries ${r2BaseUrl}/latest.yml for instant edge downloads.`
       }
     });
   });
