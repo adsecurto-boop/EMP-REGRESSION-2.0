@@ -231,6 +231,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+let isUpdateDownloaded = false;
+let downloadedUpdateInfo = null;
+
 // Auto-Updater Events with Detailed AUTO_UPDATE Log Subsystem
 autoUpdater.on('checking-for-update', () => {
   console.log('Auto-updater: checking for update...');
@@ -248,6 +251,8 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('Auto-updater: update available', info?.version);
+  isUpdateDownloaded = false;
+  downloadedUpdateInfo = null;
   logToFile('SUCCESS', 'AUTO_UPDATE', `Update found on Cloudflare R2: v${info?.version} (Installed Version: v${app.getVersion()})`, {
     targetVersion: info?.version,
     currentVersion: app.getVersion(),
@@ -266,6 +271,8 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', (info) => {
   console.log('Auto-updater: up to date', info?.version);
+  isUpdateDownloaded = false;
+  downloadedUpdateInfo = null;
   logToFile('SUCCESS', 'AUTO_UPDATE', `Application is up-to-date. Version v${app.getVersion()} matches or is newer than feed (v${info?.version || app.getVersion()}).`, {
     installedVersion: app.getVersion(),
     latestFeedVersion: info?.version || app.getVersion(),
@@ -284,12 +291,15 @@ autoUpdater.on('error', (err) => {
   const errStack = err?.stack || 'No stack trace';
   const is404 = errMsg.includes('404') || errMsg.includes('Cannot find channel');
   const isNetwork = errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') || errMsg.includes('net::ERR');
+  const isNoFilePath = errMsg.includes('No update filepath provided') || errMsg.includes("can't quit and install");
   
   let diagnosticHint = 'Auto-update check encountered an unhandled exception.';
-  if (is404) {
-    diagnosticHint = 'HTTP 404 - Release not found on github.com/adsecurto-boop/EMP-REGRESSION-2.0. Reasons: 1) GitHub Actions workflow is still building the release on Windows (~3-5 mins after commit); 2) Repo is Private (GitHub API returns 404 unless repo is set to Public under Settings); 3) No published release tag exists on GitHub yet.';
+  if (isNoFilePath) {
+    diagnosticHint = 'Auto-Update Error: No update filepath provided, can\'t quit and install. Resolution: Verify DNS resolution on the CI runner uses IPv4 (--dns-result-order=ipv4first) or verify R2 bucket public access permissions.';
+  } else if (is404) {
+    diagnosticHint = `HTTP 404 - Release not found on Cloudflare R2 bucket (${R2_UPDATE_FEED}). Ensure latest.yml and installer .exe files are uploaded with public read access.`;
   } else if (isNetwork) {
-    diagnosticHint = 'Network or DNS connectivity failure attempting to reach github.com / github-releases API.';
+    diagnosticHint = 'Network or DNS connectivity failure attempting to reach Cloudflare R2 CDN. Verify DNS resolution uses IPv4 (--dns-result-order=ipv4first).';
   }
 
   console.error('Auto-updater error:', errMsg);
@@ -308,7 +318,9 @@ autoUpdater.on('error', (err) => {
     working: false,
     error: errMsg,
     diagnosticHint,
-    message: `Auto-Update Error: ${is404 ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
+    message: isNoFilePath
+      ? "Auto-Update Error: No update filepath provided, can't quit and install. Check DNS IPv4 resolution (--dns-result-order=ipv4first) and R2 bucket permissions."
+      : (is404 ? `No published releases found on Cloudflare R2 feed (404) at ${R2_UPDATE_FEED}.` : errMsg)
   });
 });
 
@@ -332,11 +344,13 @@ autoUpdater.on('download-progress', (progressObj) => {
     working: true,
     progress: progressObj.percent,
     bytesPerSecond: progressObj.bytesPerSecond,
-    message: `Downloading update from GitHub: ${percent}% (${transferredMB} MB / ${totalMB} MB)`
+    message: `Downloading update from Cloudflare R2: ${percent}% (${transferredMB} MB / ${totalMB} MB)`
   });
 });
 
 autoUpdater.on('update-downloaded', (info) => {
+  isUpdateDownloaded = true;
+  downloadedUpdateInfo = info;
   logToFile('SUCCESS', 'AUTO_UPDATE', `Update package v${info?.version} downloaded successfully and checksum verified! Ready for restart and installation.`, {
     downloadedVersion: info?.version,
     releaseName: info?.releaseName || 'N/A',
@@ -355,7 +369,7 @@ ipcMain.handle('check-for-updates', async () => {
   logToFile('INFO', 'AUTO_UPDATE', `Manual update check triggered by user (Current Version: v${app.getVersion()}, IsPackaged: ${app.isPackaged})`);
   
   if (!app.isPackaged) {
-    logToFile('WARN', 'AUTO_UPDATE', `Manual check notice: Application is running in development mode (app.isPackaged = false). Auto-updater requires a packaged .exe binary to download and apply GitHub updates.`);
+    logToFile('WARN', 'AUTO_UPDATE', `Manual check notice: Application is running in development mode (app.isPackaged = false). Auto-updater requires a packaged .exe binary to download and apply R2 updates.`);
     const devInfo = {
       status: 'dev',
       working: true,
@@ -367,8 +381,8 @@ ipcMain.handle('check-for-updates', async () => {
 
   try {
     const result = await autoUpdater.checkForUpdates();
-    logToFile('INFO', 'AUTO_UPDATE', `checkForUpdates() call executed successfully. Awaiting feed response...`);
-    return { status: 'checking', working: true, message: 'Check initiated with GitHub Releases.', result };
+    logToFile('INFO', 'AUTO_UPDATE', `checkForUpdates() call executed successfully. Awaiting feed response from Cloudflare R2...`);
+    return { status: 'checking', working: true, message: 'Check initiated with Cloudflare R2 feed.', result };
   } catch (err) {
     const errMsg = err?.message || String(err);
     logToFile('ERROR', 'AUTO_UPDATE', `Manual checkForUpdates() exception: ${errMsg}`, {
@@ -379,16 +393,46 @@ ipcMain.handle('check-for-updates', async () => {
       status: 'error',
       working: false,
       error: errMsg,
-      message: `Auto-Update Error: ${errMsg.includes('404') ? 'No published releases found on GitHub repo yet (404).' : errMsg}`
+      message: `Auto-Update Error: ${errMsg.includes('404') ? 'No published releases found on Cloudflare R2 bucket yet (404).' : errMsg}`
     };
     mainWindow?.webContents.send('updater-status', errPayload);
     return errPayload;
   }
 });
 
-ipcMain.handle('restart-and-install', () => {
-  logToFile('INFO', 'AUTO_UPDATE', `User triggered Restart & Install. Calling autoUpdater.quitAndInstall() to update application.`);
-  autoUpdater.quitAndInstall();
+ipcMain.handle('restart-and-install', async () => {
+  logToFile('INFO', 'AUTO_UPDATE', `User triggered Restart & Install. Checking downloaded payload status... (isDownloaded=${isUpdateDownloaded})`);
+  
+  if (!isUpdateDownloaded) {
+    const errorMsg = "Auto-Update Error: No update filepath provided, can't quit and install";
+    const resolution = "Check if DNS resolution on the CI runner uses IPv4 (--dns-result-order=ipv4first) or verify R2 bucket public access permissions.";
+    logToFile('ERROR', 'AUTO_UPDATE', `${errorMsg}. Resolution: ${resolution}`, {
+      isUpdateDownloaded,
+      resolution
+    });
+    mainWindow?.webContents.send('updater-status', {
+      status: 'error',
+      working: false,
+      error: errorMsg,
+      message: `${errorMsg}. Resolution: ${resolution}`
+    });
+    return { success: false, error: errorMsg, resolution };
+  }
+
+  try {
+    logToFile('INFO', 'AUTO_UPDATE', `Calling autoUpdater.quitAndInstall(false, true) to apply version ${downloadedUpdateInfo?.version || 'latest'}.`);
+    autoUpdater.quitAndInstall(false, true);
+    return { success: true };
+  } catch (err) {
+    const errMsg = err?.message || String(err);
+    const resolution = "Check if DNS resolution on the CI runner uses IPv4 (--dns-result-order=ipv4first) or verify R2 bucket public access permissions.";
+    logToFile('ERROR', 'AUTO_UPDATE', `quitAndInstall exception: ${errMsg}. Resolution: ${resolution}`, {
+      error: errMsg,
+      resolution,
+      stack: err?.stack
+    });
+    return { success: false, error: errMsg, resolution };
+  }
 });
 
 ipcMain.handle('get-app-version', () => {

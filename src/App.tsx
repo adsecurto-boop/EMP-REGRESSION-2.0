@@ -625,9 +625,34 @@ export default function App() {
     handleStartAutoUpdate(true);
   };
 
-  const handleRestartAndInstall = () => {
+  const handleRestartAndInstall = async () => {
     if ((window as any).electronAPI) {
-      (window as any).electronAPI.restartAndInstall();
+      const res = await (window as any).electronAPI.restartAndInstall();
+      if (res && !res.success) {
+        setUpdaterState({
+          status: 'error',
+          working: false,
+          error: res.error,
+          message: `${res.error}. Resolution: ${res.resolution}`
+        });
+        setToast({
+          id: Date.now().toString(),
+          title: 'Restart & Install Error',
+          message: `${res.error}. Resolution: ${res.resolution}`,
+          type: 'error',
+          working: false,
+          timestamp: new Date().toLocaleTimeString(),
+        });
+      }
+    } else {
+      setToast({
+        id: Date.now().toString(),
+        title: 'Restart & Install Triggered',
+        message: 'Auto-update restart sequence simulated. In built desktop app, this executes autoUpdater.quitAndInstall().',
+        type: 'info',
+        working: true,
+        timestamp: new Date().toLocaleTimeString(),
+      });
     }
   };
 
