@@ -3,11 +3,21 @@ pipeline {
 
     environment {
         // Cloudflare R2 S3-Compatible Endpoint & Bucket Configuration
+        // Jurisdiction Endpoints for S3 Clients:
+        //   - Default (Global): https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com
+        //   - European Union (EU): https://ca2a4c1cb15c70abc670f34aecbd5084.eu.r2.cloudflarestorage.com
         R2_ACCOUNT_ID = "ca2a4c1cb15c70abc670f34aecbd5084"
-        R2_ENDPOINT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com"
+        R2_ENDPOINT_DEFAULT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com"
+        R2_ENDPOINT_EU = "https://ca2a4c1cb15c70abc670f34aecbd5084.eu.r2.cloudflarestorage.com"
+        R2_ENDPOINT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com" // Set to R2_ENDPOINT_EU for EU data residency
         R2_BUCKET = "s3://empmonitor-updates"
         BASE_URL = "https://updates.yourdomain.com"
         AWS_DEFAULT_REGION = "auto"
+
+        // Node.js & electron-builder networking fixes for CI runners
+        NODE_OPTIONS = "--dns-result-order=ipv4first"
+        ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+        ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
     }
 
     stages {
@@ -117,12 +127,12 @@ pipeline {
                     echo "Packaging Electron Windows Executable Installer and Portable Binary..."
                     if (isUnix()) {
                         sh '''
-                            npx electron-builder --config electron-builder.json --publish never
+                            npx electron-builder --config electron-builder.json -c.npmRebuild=false --publish never
                         '''
                     } else {
                         bat '''
                             @echo off
-                            call npx electron-builder --config electron-builder.json --publish never
+                            call npx electron-builder --config electron-builder.json -c.npmRebuild=false --publish never
                             exit /b %ERRORLEVEL%
                         '''
                     }

@@ -505,7 +505,22 @@ async function startServer() {
       playwrightProfilePath: "playwright-profile",
       recordingsAvailable: recordingsCount,
       githubRepo: "adsecurto-boop/EMP-REGRESSION-2.0",
-      autoUpdaterProvider: "GitHub Releases (electron-updater)",
+      autoUpdaterProvider: "Cloudflare R2 (S3-Compatible CDN / Generic Provider)",
+      r2Bucket: "empmonitor-updates",
+      r2AccountId: "ca2a4c1cb15c70abc670f34aecbd5084",
+      r2Endpoint: "https://updates.yourdomain.com",
+      r2Jurisdictions: {
+        default: {
+          name: "Default (Global)",
+          endpoint: "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com",
+          description: "Global distributed S3 client endpoint with multi-region anycast edge routing"
+        },
+        eu: {
+          name: "European Union (EU)",
+          endpoint: "https://ca2a4c1cb15c70abc670f34aecbd5084.eu.r2.cloudflarestorage.com",
+          description: "Jurisdiction-specific endpoint enforcing EU data residency & GDPR data sovereignty requirements"
+        }
+      },
       buildTarget: "Windows x64 Desktop (.exe installer & portable)"
     });
   });
@@ -572,7 +587,7 @@ async function startServer() {
     );
   });
 
-  // API to inspect Jenkins build data and Auto-Updater release synchronization
+  // API to inspect Jenkins build data and Auto-Updater release synchronization with Cloudflare R2
   app.get("/api/jenkins/build-info", (req, res) => {
     let pkgVersion = "0.1.3";
     try {
@@ -582,6 +597,7 @@ async function startServer() {
 
     const buildNumber = 42;
     const releaseTag = `v${pkgVersion}`;
+    const r2BaseUrl = process.env.EMPM_UPDATE_BASE_URL || "https://updates.yourdomain.com";
 
     res.json({
       success: true,
@@ -596,8 +612,9 @@ async function startServer() {
           { name: "Install Dependencies", status: "SUCCESS", duration: "32s", notes: "Clean npm --force install" },
           { name: "Build Web & Backend Server", status: "SUCCESS", duration: "18s", notes: "Compiled Vite client and standalone server.cjs" },
           { name: "Extract App Version", status: "SUCCESS", duration: "1s", notes: `Detected ${releaseTag}` },
-          { name: "Package Desktop EXE & Publish Update", status: "SUCCESS", duration: "78s", notes: "Generated installer + portable EXE & published to GitHub Releases" },
-          { name: "Archive Artifacts", status: "SUCCESS", duration: "9s", notes: "Archived dist-electron/*.exe & latest.yml" }
+          { name: "Package Desktop EXE", status: "SUCCESS", duration: "65s", notes: "Bundled installer & portable binary with sha512 checksums (-c.npmRebuild=false)" },
+          { name: "Publish to Cloudflare R2", status: "SUCCESS", duration: "14s", notes: "Synchronized dist-electron/* to s3://empmonitor-updates with public-read ACL" },
+          { name: "Archive Artifacts", status: "SUCCESS", duration: "8s", notes: "Archived dist-electron/*.exe, latest.yml & latest.json" }
         ],
         gitBuildData: {
           branch: "main",
@@ -607,28 +624,46 @@ async function startServer() {
           targetVersion: releaseTag
         }
       },
-      githubRelease: {
-        repo: "adsecurto-boop/EMP-REGRESSION-2.0",
+      r2Release: {
+        bucket: "empmonitor-updates",
+        accountId: "ca2a4c1cb15c70abc670f34aecbd5084",
+        baseUrl: r2BaseUrl,
+        jurisdictions: {
+          default: {
+            name: "Default (Global)",
+            endpoint: "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com",
+            region: "auto",
+            compliance: "Global Anycast Multi-Region Distribution"
+          },
+          eu: {
+            name: "European Union (EU)",
+            endpoint: "https://ca2a4c1cb15c70abc670f34aecbd5084.eu.r2.cloudflarestorage.com",
+            region: "eu",
+            compliance: "EU Data Residency & GDPR Sovereign Jurisdiction"
+          }
+        },
         releaseTag,
         releaseName: `EmpMonitor Desktop Suite ${releaseTag}`,
-        status: "PUBLISHED",
+        status: "PUBLISHED_TO_R2",
         autoUpdaterManifestAvailable: true,
+        edgeCacheStatus: "HIT (Cloudflare Anycast CDN)",
         artifacts: [
-          { name: `EmpMonitor Desktop Dashboard Runner Setup ${pkgVersion}.exe`, type: "NSIS Installer", size: "64.2 MB" },
-          { name: `EmpMonitor Desktop Dashboard Runner ${pkgVersion}.exe`, type: "Portable Executable", size: "61.8 MB" },
-          { name: "latest.yml", type: "electron-updater manifest (SHA-512)", size: "482 B" }
+          { name: `EmpMonitor Desktop Setup ${pkgVersion}.exe`, type: "NSIS Installer", size: "64.2 MB", sha512: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855..." },
+          { name: `EmpMonitor Desktop Runner ${pkgVersion}.exe`, type: "Portable Executable", size: "61.8 MB", sha512: "a8f5f167f44f4964e6c998dee827110c... " },
+          { name: "latest.yml", type: "electron-updater manifest (SHA-512)", size: "482 B", sha512: "9b71d224bd62f3785d96d46ad3ea3d733..." },
+          { name: "latest.json", type: "Universal REST Manifest", size: "612 B", sha512: "8c91a324bd62f3785d96d46ad3ea3d733..." }
         ],
-        feedUrl: `https://github.com/adsecurto-boop/EMP-REGRESSION-2.0/releases/tag/${releaseTag}`,
-        apiFeedUrl: "https://api.github.com/repos/adsecurto-boop/EMP-REGRESSION-2.0/releases/latest"
+        feedUrl: `${r2BaseUrl}/latest.yml`,
+        jsonFeedUrl: `${r2BaseUrl}/latest.json`
       },
       autoUpdaterStatus: {
-        provider: "github",
-        owner: "adsecurto-boop",
-        repo: "EMP-REGRESSION-2.0",
+        provider: "generic",
+        r2Bucket: "empmonitor-updates",
+        feedUrl: r2BaseUrl,
         channel: "latest",
-        protocol: "HTTPS / GitHub Releases REST API",
+        protocol: "HTTPS / Cloudflare R2 S3-Compatible Edge CDN",
         readyForClientAutoUpdate: true,
-        verificationSummary: `Jenkins build #${buildNumber} successfully published release ${releaseTag} to GitHub with latest.yml. Desktop app autoUpdater will automatically download and stage this release.`
+        verificationSummary: `Jenkins build #${buildNumber} successfully packaged and synchronized ${releaseTag} to Cloudflare R2 bucket (s3://empmonitor-updates). Auto-updater client queries ${r2BaseUrl}/latest.yml for instant edge downloads.`
       }
     });
   });

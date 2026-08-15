@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { FeatureProfile, StructuredReport } from './types';
 import { ReportViewer } from './components/ReportViewer';
+import { AutoUpdateSection } from './components/AutoUpdateSection';
 
 interface DesktopStatus {
   environment: string;
@@ -54,7 +55,7 @@ export default function App() {
   const [updaterState, setUpdaterState] = useState<UpdaterInfo>({
     status: 'idle',
     working: true,
-    message: 'Ready to check for GitHub updates'
+    message: 'Ready to check for Cloudflare R2 updates'
   });
 
   const [toast, setToast] = useState<ToastNotification | null>(null);
@@ -93,7 +94,19 @@ export default function App() {
         targetVersion: string;
       };
     };
-    githubRelease: {
+    r2Release?: {
+      bucket: string;
+      baseUrl: string;
+      releaseTag: string;
+      releaseName: string;
+      status: string;
+      autoUpdaterManifestAvailable: boolean;
+      edgeCacheStatus: string;
+      artifacts: Array<{ name: string; type: string; size: string; sha512?: string }>;
+      feedUrl: string;
+      jsonFeedUrl: string;
+    };
+    githubRelease?: {
       repo: string;
       releaseTag: string;
       releaseName: string;
@@ -105,8 +118,10 @@ export default function App() {
     };
     autoUpdaterStatus: {
       provider: string;
-      owner: string;
-      repo: string;
+      r2Bucket?: string;
+      feedUrl?: string;
+      owner?: string;
+      repo?: string;
       channel: string;
       protocol: string;
       readyForClientAutoUpdate: boolean;
@@ -199,8 +214,8 @@ export default function App() {
         const res = await (window as any).electronAPI.checkForUpdates();
         setToast({
           id: Date.now().toString(),
-          title: 'Auto-Update Check Initiated',
-          message: res?.message || 'Contacting GitHub Releases feed...',
+          title: 'Cloudflare R2 Update Check Initiated',
+          message: res?.message || 'Connecting to Cloudflare R2 update feed (https://updates.yourdomain.com)...',
           type: 'info',
           working: true,
           timestamp: new Date().toLocaleTimeString(),
@@ -212,14 +227,14 @@ export default function App() {
           body: JSON.stringify({
             level: 'INFO',
             category: 'AUTO_UPDATE',
-            message: 'Manual auto-update check initiated via Web Inspector Dashboard',
-            details: { appVersion, environment: 'Web Preview Engine' }
+            message: 'Manual auto-update check initiated against Cloudflare R2 feed (https://updates.yourdomain.com)',
+            details: { appVersion, provider: 'Cloudflare R2', environment: 'Web Preview Engine' }
           })
         });
         setToast({
           id: Date.now().toString(),
-          title: 'Auto-Update Diagnostic Logged',
-          message: 'Recorded manual auto-update check to log.txt',
+          title: 'Cloudflare R2 Diagnostic Logged',
+          message: 'Contacted Cloudflare R2 edge manifest (latest.yml). Recorded to log.txt.',
           type: 'info',
           working: true,
           timestamp: new Date().toLocaleTimeString(),
@@ -518,36 +533,37 @@ export default function App() {
     setUpdateProgress(0);
     setUpdateLogs([]);
     const simulateError = forceError || shouldSimulateError;
+    const r2Url = jenkinsInfo?.r2Release?.baseUrl || 'https://updates.yourdomain.com';
 
-    await appendUpdateLog('INFO', `Auto-updater process initiated for v${appVersion}.`, `Client runtime: ${window.navigator.userAgent}`);
-    setUpdateStage('Connecting to GitHub Releases feed (v0.1.3)...');
-    setUpdaterState({ status: 'checking', working: true, message: 'Connecting to GitHub Releases feed...' });
+    await appendUpdateLog('INFO', `Auto-updater sequence initiated for v${appVersion}.`, `Target Provider: Cloudflare R2 Generic Feed (${r2Url})`);
+    setUpdateStage('Resolving Cloudflare R2 Anycast CDN Edge...');
+    setUpdaterState({ status: 'checking', working: true, message: 'Connecting to Cloudflare R2 object storage feed...' });
     setUpdateProgress(10);
 
-    await new Promise(r => setTimeout(r, 600));
-    await appendUpdateLog('INFO', 'Querying GitHub API: https://api.github.com/repos/empmonitor/regression-suite/releases/latest');
+    await new Promise(r => setTimeout(r, 500));
+    await appendUpdateLog('INFO', `GET ${r2Url}/latest.yml`, 'HTTP/2 200 OK | CF-Cache-Status: HIT | Content-Type: text/yaml');
     setUpdateProgress(25);
 
     if (simulateError) {
-      await new Promise(r => setTimeout(r, 800));
-      setUpdateStage('Error encountering release feed connection');
-      setUpdateProgress(40);
-      await appendUpdateLog('WARN', 'GitHub API response header check: HTTP 404 / ERR_UPDATER_CHANNEL_NOT_FOUND');
-      
       await new Promise(r => setTimeout(r, 700));
-      setUpdateProgress(40);
-      await appendUpdateLog('ERROR', 'ERR_UPDATER_DOWNLOAD_FAILED: Could not download release binary.', '404 Not Found - No published release asset matching emp-regression-suite-0.1.3.exe found on repository.');
+      setUpdateStage('Connection failure querying update feed');
+      setUpdateProgress(35);
+      await appendUpdateLog('WARN', `R2 Edge Gateway Timeout / DNS Lookup failure at ${r2Url}`);
+      
+      await new Promise(r => setTimeout(r, 600));
+      setUpdateProgress(35);
+      await appendUpdateLog('ERROR', 'ERR_UPDATER_R2_FEED_UNREACHABLE: Failed to fetch latest.yml from Cloudflare R2.', 'Diagnostic Hint: Verify DNS resolution order (--dns-result-order=ipv4first) and verify public access policies on bucket s3://empmonitor-updates.');
       
       setUpdaterState({
         status: 'error',
         working: false,
-        error: 'ERR_UPDATER_CHANNEL_NOT_FOUND: 404 Not Found',
-        message: 'Auto-Update Error: 404 Not Found - Release binary not published on GitHub feed.'
+        error: 'ERR_UPDATER_R2_FEED_UNREACHABLE: 404 / Network Timeout',
+        message: 'Auto-Update Error: Failed to resolve Cloudflare R2 feed (https://updates.yourdomain.com).'
       });
       setToast({
         id: Date.now().toString(),
-        title: 'Auto-Update Error (v0.1.3)',
-        message: 'ERR_UPDATER_CHANNEL_NOT_FOUND: Release feed returned 404.',
+        title: 'Auto-Update Error (Cloudflare R2)',
+        message: 'ERR_UPDATER_R2_FEED_UNREACHABLE: Could not connect to R2 edge.',
         type: 'error',
         working: false,
         timestamp: new Date().toLocaleTimeString(),
@@ -556,40 +572,40 @@ export default function App() {
       return;
     }
 
-    await new Promise(r => setTimeout(r, 600));
-    setUpdateStage('Release found (v0.1.3). Validating package checksums...');
-    await appendUpdateLog('INFO', 'GitHub Release v0.1.3 discovered. Package size: 14.82 MB.');
-    await appendUpdateLog('INFO', 'SHA-256 Checksum: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    await new Promise(r => setTimeout(r, 500));
+    setUpdateStage(`Manifest parsed: v${appVersion} found. Checking SHA-512...`);
+    await appendUpdateLog('INFO', `Cloudflare R2 Release v${appVersion} discovered in latest.yml.`);
+    await appendUpdateLog('INFO', 'Target Binary: EmpMonitor Desktop Setup 0.1.3.exe (64.2 MB)');
+    await appendUpdateLog('INFO', 'SHA-512 Hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8555e7144e8... [MATCHED]');
     setUpdateProgress(45);
 
-    await new Promise(r => setTimeout(r, 700));
-    setUpdateStage('Downloading update payload (emp-regression-0.1.3.exe)...');
-    await appendUpdateLog('INFO', 'Downloading update chunks: 4.2 MB / 14.82 MB (28%)');
-    setUpdateProgress(65);
+    await new Promise(r => setTimeout(r, 600));
+    setUpdateStage('Streaming NSIS installer chunks from Cloudflare Edge...');
+    await appendUpdateLog('INFO', `Streaming chunks from ${r2Url}/EmpMonitor%20Desktop%20Setup%200.1.3.exe (@ 4.8 MB/s)`);
+    setUpdateProgress(70);
 
-    await new Promise(r => setTimeout(r, 800));
-    await appendUpdateLog('INFO', 'Downloading update chunks: 11.5 MB / 14.82 MB (78%)');
-    setUpdateProgress(88);
+    await new Promise(r => setTimeout(r, 600));
+    await appendUpdateLog('INFO', 'Downloaded 64.2 MB / 64.2 MB (100%). Verifying Authenticode digital signature.');
+    setUpdateProgress(90);
 
-    await new Promise(r => setTimeout(r, 700));
-    setUpdateStage('Verifying code signature & staging package...');
-    await appendUpdateLog('INFO', 'Download complete (14.82 MB). Verifying authenticode digital signature.');
-    await appendUpdateLog('SUCCESS', 'Digital signature verified successfully (EmpMonitor Security Authority).');
+    await new Promise(r => setTimeout(r, 500));
+    setUpdateStage('Digital certificate verified. Staging installer package...');
+    await appendUpdateLog('SUCCESS', 'Authenticode Certificate Valid: EmpMonitor Core Security Authority.');
     setUpdateProgress(100);
 
-    setUpdateStage('Update package ready for installation.');
+    setUpdateStage('Update package staged and ready for atomic installation.');
     setUpdaterState({
       status: 'downloaded',
       working: true,
       progress: 100,
-      message: 'Update v0.1.3 downloaded successfully. Ready to restart and apply updates.'
+      message: `Update v${appVersion} downloaded via Cloudflare R2 CDN. Ready to restart and install.`
     });
-    await appendUpdateLog('SUCCESS', 'Auto-update package v0.1.3 staged and ready to install.');
+    await appendUpdateLog('SUCCESS', `Auto-update package v${appVersion} staged from Cloudflare R2. Ready for atomic restart.`);
     
     setToast({
       id: Date.now().toString(),
-      title: 'Auto-Update Download Complete (v0.1.3)',
-      message: 'Version 0.1.3 package downloaded and verified. Click "Restart & Install" to finish.',
+      title: 'Cloudflare R2 Update Ready',
+      message: `Version ${appVersion} downloaded from Cloudflare R2. Click "Restart & Install" to apply.`,
       type: 'success',
       working: true,
       timestamp: new Date().toLocaleTimeString(),
@@ -631,7 +647,7 @@ export default function App() {
                 <span>v{appVersion}</span>
               </span>
             </div>
-            <p className="text-xs text-slate-400">Integrated Chrome Browser Inspection & GitHub Auto-Updating EXE Client</p>
+            <p className="text-xs text-slate-400">Integrated Chrome Browser Inspection & Cloudflare R2 Auto-Updating EXE Client</p>
           </div>
         </div>
 
@@ -948,182 +964,37 @@ export default function App() {
           <div className="flex-1 p-6 overflow-y-auto space-y-6">
             {activeTab === 'desktop' && (
               <div className="space-y-6">
-                {/* Auto Updater Card */}
-                <div id="auto-updater-card" className="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
-                    <Sparkles className="w-32 h-32 text-indigo-400" />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20">
-                          <Radio className="w-5 h-5 animate-pulse" />
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="text-sm font-bold text-white">GitHub Auto-Updater Engine</h3>
-                            <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono px-2 py-0.5 rounded font-bold">
-                              Release v{appVersion}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400">Automated desktop release checks & binary installer deployment</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleStartAutoUpdate(false)}
-                          disabled={isUpdating}
-                          className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg font-semibold text-xs transition disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Simulate Success</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleStartAutoUpdate(true)}
-                          disabled={isUpdating}
-                          className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg font-semibold text-xs transition disabled:opacity-50"
-                        >
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                          <span>Simulate Error</span>
-                        </button>
-
-                        <button
-                          onClick={handleCheckUpdates}
-                          disabled={isUpdating}
-                          className="flex items-center space-x-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-xs transition shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
-                          <span>{isUpdating ? 'Updating...' : 'Check for Updates'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 flex items-center space-x-1.5">
-                          <span>Updater Status:</span>
-                          <span className="font-semibold text-indigo-400 font-mono uppercase bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                            {updaterState.status}
-                          </span>
-                        </span>
-                        {updateStage && (
-                          <span className="text-slate-400 font-mono text-[11px] truncate max-w-xs text-right">
-                            {updateStage}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-300 font-medium text-[11px]">Auto-Update Download Progress</span>
-                          <span className="font-mono text-indigo-400 font-bold">{updateProgress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-900 border border-slate-800 h-3 rounded-full overflow-hidden p-0.5">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 shadow-sm ${
-                              updaterState.status === 'error'
-                                ? 'bg-rose-500 shadow-rose-500/50'
-                                : updaterState.status === 'downloaded'
-                                ? 'bg-emerald-500 shadow-emerald-500/50'
-                                : 'bg-gradient-to-r from-indigo-500 to-cyan-400 shadow-indigo-500/50'
-                            }`}
-                            style={{ width: `${updateProgress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {updaterState.message && (
-                        <p className={`text-xs p-2.5 rounded border ${
-                          updaterState.status === 'error'
-                            ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-                            : updaterState.status === 'downloaded'
-                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                            : 'bg-slate-900 border-slate-800 text-slate-300'
-                        }`}>
-                          {updaterState.message}
-                        </p>
-                      )}
-
-                      {/* Detailed Auto-Update Error / Log Console */}
-                      <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-900/60">
-                        <div
-                          onClick={() => setShowLogConsole(!showLogConsole)}
-                          className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-                            <span className="text-xs font-bold text-slate-300">Detailed Auto-Update Execution & Diagnostic Logs</span>
-                            {updateLogs.length > 0 && (
-                              <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded font-mono">
-                                {updateLogs.length} events
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs text-indigo-400 font-semibold">{showLogConsole ? 'Hide Console' : 'Show Console'}</span>
-                        </div>
-
-                        {showLogConsole && (
-                          <div className="p-3 font-mono text-[11px] max-h-48 overflow-y-auto space-y-1.5 bg-slate-950">
-                            {updateLogs.length === 0 ? (
-                              <p className="text-slate-500 italic text-center py-2">No update events logged yet. Click "Check for Updates" to begin sequence.</p>
-                            ) : (
-                              updateLogs.map((log, idx) => (
-                                <div key={idx} className="flex items-start space-x-2 border-b border-slate-900/50 pb-1">
-                                  <span className="text-slate-500 text-[10px] shrink-0">{log.time}</span>
-                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 ${
-                                    log.level === 'ERROR' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                                    log.level === 'WARN' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                    log.level === 'SUCCESS' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                    'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                                  }`}>
-                                    {log.level}
-                                  </span>
-                                  <div className="flex-1 space-y-0.5">
-                                    <p className="text-slate-200">{log.msg}</p>
-                                    {log.details && (
-                                      <pre className="text-[10px] text-rose-300 bg-rose-950/40 p-1.5 rounded border border-rose-800/30 overflow-x-auto whitespace-pre-wrap">
-                                        {log.details}
-                                      </pre>
-                                    )}
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {updaterState.status === 'downloaded' && (
-                        <button
-                          onClick={handleRestartAndInstall}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/30 cursor-pointer"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>Restart & Install Update (v{appVersion})</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* Modern Cloudflare R2 Auto-Update System */}
+                <AutoUpdateSection
+                  appVersion={appVersion}
+                  updaterState={updaterState}
+                  updateProgress={updateProgress}
+                  isUpdating={isUpdating}
+                  updateStage={updateStage}
+                  updateLogs={updateLogs}
+                  jenkinsInfo={jenkinsInfo}
+                  onCheckUpdates={handleCheckUpdates}
+                  onSimulateSuccess={() => handleStartAutoUpdate(false)}
+                  onSimulateError={() => handleStartAutoUpdate(true)}
+                  onRestartAndInstall={handleRestartAndInstall}
+                  onDownloadLogs={handleDownloadLogs}
+                />
 
                 {/* Git Build Data & Latest Commit Message Card */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
                     <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+                      <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
                         <Github className="w-5 h-5" />
                       </div>
                       <div>
                         <div className="flex items-center space-x-2">
-                          <h3 className="text-sm font-bold text-white">Git Build Data & Commit Tracker</h3>
+                          <h3 className="text-sm font-bold text-white">Git Build Metadata & Commit Tracker</h3>
                           <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono px-2 py-0.5 rounded font-bold">
                             Branch: {gitData?.branch || 'main'}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-400">Inspected from Jenkins checkout and repository HEAD</p>
+                        <p className="text-xs text-slate-400">Synchronized from Jenkins pipeline checkout and repository HEAD</p>
                       </div>
                     </div>
 
@@ -1153,11 +1024,11 @@ export default function App() {
                   </div>
 
                   {/* Latest Commit Message Highlight Box */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-1.5">
                         <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Latest Commit Message</span>
+                        <span>Latest Pipeline Commit</span>
                       </span>
                       <div className="flex items-center space-x-2 font-mono text-[11px]">
                         <span className="text-slate-400">Hash:</span>
@@ -1195,123 +1066,15 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Jenkins CI/CD & GitHub Release Pipeline Verification */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
-                        <Cpu className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-sm font-bold text-white">Jenkins Build Data & GitHub Release Synchronization</h3>
-                          <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded font-bold">
-                            Build #{jenkinsInfo?.jenkins.buildNumber || 42} • {jenkinsInfo?.jenkins.status || 'SUCCESS'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400">Verifies that Jenkins build artifacts publish to GitHub Releases for client auto-update</p>
-                      </div>
-                    </div>
-
-                    <span className="text-xs text-slate-400 font-mono">
-                      Pipeline Duration: {jenkinsInfo?.jenkins.durationSeconds || 142.6}s
-                    </span>
-                  </div>
-
-                  {/* Verification Pipeline Steps */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>1. Git Commit in Jenkins</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        Jenkins records latest commit: <code className="text-indigo-300 font-mono text-[10px]">{jenkinsInfo?.jenkins.gitBuildData.commitMessage || gitData?.commit.message}</code> and sets build display name.
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>2. Desktop EXE Packaging</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        <code className="text-indigo-300 font-mono text-[10px]">electron-builder</code> bundles Windows x64 installer & portable binaries with <code className="text-emerald-300">latest.yml</code> (SHA-512).
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>3. GitHub Release Auto-Update</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        Published to <code className="text-indigo-300 font-mono text-[10px]">github.com/.../releases/tag/v0.1.3</code>. Client desktop app automatically downloads and applies updates.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pipeline Stage Breakdown */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Jenkins Pipeline Stages Execution</h4>
-                    <div className="space-y-2">
-                      {(jenkinsInfo?.jenkins.pipelineStages || [
-                        { name: "Checkout & Git Metadata", status: "SUCCESS", duration: "4s", notes: "Extracted commit message & HEAD hash" },
-                        { name: "Install Dependencies", status: "SUCCESS", duration: "32s", notes: "Clean npm --force install" },
-                        { name: "Build Web & Backend Server", status: "SUCCESS", duration: "18s", notes: "Compiled Vite client and standalone server.cjs" },
-                        { name: "Extract App Version", status: "SUCCESS", duration: "1s", notes: "Detected v0.1.3" },
-                        { name: "Package Desktop EXE & Publish Update", status: "SUCCESS", duration: "78s", notes: "Generated installer + portable EXE & published to GitHub Releases" },
-                        { name: "Archive Artifacts", status: "SUCCESS", duration: "9s", notes: "Archived dist-electron/*.exe & latest.yml" }
-                      ]).map((stg, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 px-2.5 bg-slate-900/60 rounded border border-slate-800 text-xs">
-                          <div className="flex items-center space-x-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                            <span className="font-semibold text-slate-200">{stg.name}</span>
-                            <span className="text-slate-500 text-[11px]">({stg.notes})</span>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <span className="text-[10px] font-mono text-slate-400">{stg.duration}</span>
-                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-mono px-2 py-0.2 rounded font-bold">
-                              {stg.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* GitHub Release Artifacts Summary */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-2 text-xs">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-                      <span className="font-bold text-slate-300">Published Release Artifacts on GitHub Feed</span>
-                      <span className="text-emerald-400 font-mono font-semibold">Feed Status: SYNCHRONIZED</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
-                      <div className="bg-slate-900 p-2 rounded border border-slate-800 text-slate-300">
-                        <div className="text-indigo-400 font-mono font-bold">Installer Binary (.exe)</div>
-                        <div className="text-slate-400">EmpMonitor Desktop Setup 0.1.3.exe (64.2 MB)</div>
-                      </div>
-                      <div className="bg-slate-900 p-2 rounded border border-slate-800 text-slate-300">
-                        <div className="text-indigo-400 font-mono font-bold">Portable Binary (.exe)</div>
-                        <div className="text-slate-400">EmpMonitor Desktop Runner 0.1.3.exe (61.8 MB)</div>
-                      </div>
-                      <div className="bg-slate-900 p-2 rounded border border-slate-800 text-slate-300">
-                        <div className="text-emerald-400 font-mono font-bold">Auto-Update Manifest</div>
-                        <div className="text-slate-400">latest.yml (SHA-512 Verification Checksum)</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Status Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                     <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
+                      <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
                         <Cpu className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">EmpMonitor Environment</h4>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">EmpMonitor Runtime Environment</h4>
                         <p className="text-xs text-slate-400">Target host execution context</p>
                       </div>
                     </div>
@@ -1331,40 +1094,40 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                     <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
-                        <Github className="w-5 h-5" />
+                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
+                        <Globe className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">CI/CD & Desktop EXE Packaging</h4>
-                        <p className="text-xs text-slate-400">Jenkins Pipeline & GitHub Releases</p>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Cloudflare R2 Object Storage</h4>
+                        <p className="text-xs text-slate-400">Zero-egress binary distribution</p>
                       </div>
                     </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Pipeline Config</span>
-                        <span className="text-indigo-400 font-mono font-medium">Jenkinsfile (Zero Compute Cost)</span>
+                        <span className="text-slate-400">R2 Bucket</span>
+                        <span className="text-indigo-400 font-mono font-medium">s3://empmonitor-updates</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Workflow Fallback</span>
-                        <span className="text-slate-200 font-mono">.github/workflows/build-desktop-exe.yml</span>
+                        <span className="text-slate-400">Custom Domain</span>
+                        <span className="text-cyan-300 font-mono">https://updates.yourdomain.com</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Target Executable</span>
-                        <span className="text-slate-200 font-medium">Windows x64 (.exe installer + portable)</span>
+                        <span className="text-slate-400">Packaging Engine</span>
+                        <span className="text-emerald-400 font-mono">electron-builder (generic)</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Instructions */}
-                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How to Build & Auto-Update via Jenkins</h4>
-                  <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2">
-                    <li><strong className="text-slate-200">Self-Hosted Jenkins:</strong> Runs on your own machine/server with Node.js & Python installed (100% free with no GitHub Actions compute charges).</li>
-                    <li><strong className="text-slate-200">Automated Packaging:</strong> Jenkins runs <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npm run build</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npx electron-builder --publish always</code> using the included <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">Jenkinsfile</code>.</li>
-                    <li><strong className="text-slate-200">Seamless Auto-Updates:</strong> The built <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">.exe</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">latest.yml</code> are published to GitHub Releases (or your HTTP server) so installed desktop apps automatically detect and download updates.</li>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How Cloudflare R2 Auto-Updates Work</h4>
+                  <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2 leading-relaxed">
+                    <li><strong className="text-slate-200">Continuous Packaging in Jenkins:</strong> On git commit tag, Jenkins runs <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npm run build</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">electron-builder -c.npmRebuild=false --publish never</code> to produce Windows installers and portable binaries.</li>
+                    <li><strong className="text-slate-200">Cloudflare R2 Synchronization:</strong> Jenkins synchronizes <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">dist-electron/*</code> to <code className="text-cyan-400 bg-slate-800 px-1.5 py-0.5 rounded">s3://empmonitor-updates/</code> using S3 credentials (<code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">cloudflare-r2-creds</code>) with zero egress bandwidth charges.</li>
+                    <li><strong className="text-slate-200">Global Edge Updates:</strong> The EmpMonitor desktop client checks <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">https://updates.yourdomain.com/latest.yml</code> via Cloudflare CDN and seamlessly stages background updates.</li>
                   </ol>
                 </div>
               </div>

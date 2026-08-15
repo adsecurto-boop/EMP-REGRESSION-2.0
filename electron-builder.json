@@ -37,7 +37,8 @@
         "arch": ["x64"]
       }
     ],
-    "requestedExecutionLevel": "asInvoker"
+    "requestedExecutionLevel": "asInvoker",
+    "signAndEditExecutable": false
   },
   "nsis": {
     "oneClick": false,
@@ -48,9 +49,7 @@
     "deleteAppDataOnUninstall": false
   },
   "publish": {
-    "provider": "github",
-    "owner": "adsecurto-boop",
-    "repo": "EMP-REGRESSION-2.0",
-    "releaseType": "draft"
+    "provider": "generic",
+    "url": "https://updates.yourdomain.com/"
   }
 }

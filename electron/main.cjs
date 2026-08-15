@@ -72,11 +72,15 @@ const autoUpdateLogger = {
 autoUpdater.logger = autoUpdateLogger;
 autoUpdater.autoDownload = true;
 
-// Configure authorization header if token present for private repositories
-if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) {
-  autoUpdater.requestHeaders = {
-    Authorization: `token ${process.env.GH_TOKEN || process.env.GITHUB_TOKEN}`
-  };
+// Configure Cloudflare R2 Generic Auto-Update Feed
+const R2_UPDATE_FEED = process.env.EMPM_UPDATE_BASE_URL || 'https://updates.yourdomain.com';
+try {
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: R2_UPDATE_FEED
+  });
+} catch (e) {
+  console.warn('Feed URL initialization note:', e);
 }
 
 function loadURLWithRetry(win, url, attempts = 0) {
@@ -220,33 +224,33 @@ app.on('window-all-closed', () => {
 // Auto-Updater Events with Detailed AUTO_UPDATE Log Subsystem
 autoUpdater.on('checking-for-update', () => {
   console.log('Auto-updater: checking for update...');
-  logToFile('INFO', 'AUTO_UPDATE', 'Connecting to GitHub Releases feed (https://github.com/adsecurto-boop/EMP-REGRESSION-2.0/releases)...', {
+  logToFile('INFO', 'AUTO_UPDATE', `Connecting to Cloudflare R2 update feed (${R2_UPDATE_FEED})...`, {
     currentVersion: app.getVersion(),
-    feedProvider: 'GitHub Releases (electron-updater)',
+    feedProvider: 'Cloudflare R2 (S3-Compatible CDN)',
     timestamp: new Date().toISOString()
   });
   mainWindow?.webContents.send('updater-status', {
     status: 'checking',
     working: true,
-    message: 'Connecting to GitHub Releases feed... Checking for updates.'
+    message: 'Connecting to Cloudflare R2 update feed... Checking for updates.'
   });
 });
 
 autoUpdater.on('update-available', (info) => {
   console.log('Auto-updater: update available', info?.version);
-  logToFile('SUCCESS', 'AUTO_UPDATE', `Update found on GitHub Releases: v${info?.version} (Installed Version: v${app.getVersion()})`, {
+  logToFile('SUCCESS', 'AUTO_UPDATE', `Update found on Cloudflare R2: v${info?.version} (Installed Version: v${app.getVersion()})`, {
     targetVersion: info?.version,
     currentVersion: app.getVersion(),
     releaseName: info?.releaseName || 'N/A',
     releaseDate: info?.releaseDate || 'N/A',
     files: info?.files?.map(f => ({ name: f.url, size: f.size })) || [],
-    updateType: 'GitHub Binary Release'
+    updateType: 'Cloudflare R2 Binary Release'
   });
   mainWindow?.webContents.send('updater-status', {
     status: 'available',
     working: true,
     info,
-    message: `YES - Auto-Updater is Working! New release v${info?.version} found on GitHub. Downloading update payload...`
+    message: `YES - Auto-Updater is Working! New release v${info?.version} found on Cloudflare R2. Downloading update payload...`
   });
 });
 
