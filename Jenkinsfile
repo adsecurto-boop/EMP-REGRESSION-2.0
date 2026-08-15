@@ -10,7 +10,7 @@ pipeline {
         R2_ENDPOINT_DEFAULT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com"
         R2_ENDPOINT_EU = "https://ca2a4c1cb15c70abc670f34aecbd5084.eu.r2.cloudflarestorage.com"
         R2_ENDPOINT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com" // Set to R2_ENDPOINT_EU for EU data residency
-        R2_BUCKET = "s3://empmonitor-updates"
+        R2_BUCKET = "s3://emp-regression-suite"
         BASE_URL = "https://updates.yourdomain.com"
         AWS_DEFAULT_REGION = "auto"
 
