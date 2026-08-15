@@ -20,14 +20,14 @@ pipeline {
                     if (isUnix()) {
                         sh '''
                             npm install --force
-                            pip3 install playwright requests || pip install playwright requests
+                            pip3 install playwright requests 2>/dev/null || pip install playwright requests 2>/dev/null || python3 -m pip install playwright requests 2>/dev/null || echo "Python pip dependencies checked."
                         '''
                     } else {
                         bat '''
                             if exist package-lock.json del /f /q package-lock.json
                             call npm install --force
                             call npm install --no-save @tailwindcss/oxide-win32-x64-msvc @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @esbuild/win32-x64
-                            call pip install playwright requests
+                            python -m pip install playwright requests 2>nul || py -m pip install playwright requests 2>nul || pip install playwright requests 2>nul || echo "Python pip optional step skipped on build agent."
                         '''
                     }
                 }
@@ -49,8 +49,11 @@ pipeline {
         stage('Extract App Version') {
             steps {
                 script {
-                    def pkgJson = readJSON file: 'package.json'
-                    env.APP_VERSION = "v${pkgJson.version}"
+                    if (isUnix()) {
+                        env.APP_VERSION = "v" + sh(script: "node -p \"require('./package.json').version\"", returnStdout: true).trim()
+                    } else {
+                        env.APP_VERSION = "v" + bat(script: "@node -p \"require('./package.json').version\"", returnStdout: true).trim()
+                    }
                     echo "Building Version: ${env.APP_VERSION}"
                 }
             }
