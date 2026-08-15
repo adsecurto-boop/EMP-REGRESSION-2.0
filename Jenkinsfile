@@ -8,21 +8,38 @@ pipeline {
     }
 
     stages {
-        stage('Checkout & Git Metadata') {
+        stage('Git Metadata & Build Info') {
             steps {
-                checkout scm
                 script {
-                    if (isUnix()) {
-                        env.GIT_COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                        env.GIT_COMMIT_MSG = sh(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
-                        env.GIT_AUTHOR = sh(script: 'git log -1 --pretty="%an <%ae>"', returnStdout: true).trim()
-                        env.GIT_BRANCH_NAME = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
-                    } else {
-                        env.GIT_COMMIT_HASH = bat(script: '@echo off\nfor /f "tokens=*" %%i in (\'git rev-parse --short HEAD\') do echo %%i', returnStdout: true).trim()
-                        env.GIT_COMMIT_MSG = bat(script: '@echo off\nfor /f "tokens=*" %%i in (\'git log -1 --pretty=%%B\') do echo %%i', returnStdout: true).trim()
-                        env.GIT_AUTHOR = bat(script: '@echo off\nfor /f "tokens=*" %%i in (\'git log -1 --pretty="%%an <%%ae>"\') do echo %%i', returnStdout: true).trim()
-                        env.GIT_BRANCH_NAME = bat(script: '@echo off\nfor /f "tokens=*" %%i in (\'git rev-parse --abbrev-ref HEAD\') do echo %%i', returnStdout: true).trim()
+                    try {
+                        if (isUnix()) {
+                            env.GIT_COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                            env.GIT_COMMIT_MSG = sh(script: 'git log -1 --format=%s', returnStdout: true).trim()
+                            env.GIT_AUTHOR = sh(script: 'git log -1 --format="%an <%ae>"', returnStdout: true).trim()
+                            env.GIT_BRANCH_NAME = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                        } else {
+                            env.GIT_COMMIT_HASH = bat(script: '@git rev-parse --short HEAD', returnStdout: true).trim().split('[\r\n]+').last().trim()
+                            env.GIT_COMMIT_MSG = bat(script: '@git log -1 --format=%%s', returnStdout: true).trim().split('[\r\n]+').last().trim()
+                            env.GIT_AUTHOR = bat(script: '@git log -1 --format=%%an', returnStdout: true).trim().split('[\r\n]+').last().trim()
+                            env.GIT_BRANCH_NAME = bat(script: '@git rev-parse --abbrev-ref HEAD', returnStdout: true).trim().split('[\r\n]+').last().trim()
+                        }
+                    } catch (Exception exc) {
+                        echo "Warning during git extraction: ${exc}. Using fallback environment variables."
                     }
+
+                    if (!env.GIT_COMMIT_HASH) {
+                        env.GIT_COMMIT_HASH = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : "HEAD"
+                    }
+                    if (!env.GIT_COMMIT_MSG) {
+                        env.GIT_COMMIT_MSG = "Automated release build"
+                    }
+                    if (!env.GIT_BRANCH_NAME) {
+                        env.GIT_BRANCH_NAME = env.BRANCH_NAME ?: "main"
+                    }
+                    if (!env.GIT_AUTHOR) {
+                        env.GIT_AUTHOR = "EmpMonitor QA Team"
+                    }
+
                     echo "=== JENKINS GIT BUILD DATA ==="
                     echo "Branch: ${env.GIT_BRANCH_NAME}"
                     echo "Commit Hash: ${env.GIT_COMMIT_HASH}"
