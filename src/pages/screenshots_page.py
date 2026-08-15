@@ -81,6 +81,17 @@ class ScreenshotsPage:
         self.page.wait_for_selector("div.screenshot-thumb, a[title*='-sc'], div.sc-container", state="attached", timeout=10000)
         return self.screenshot_cards.count()
 
+    def extract_screenshot_timestamps(self) -> List[str]:
+        """Extracts raw titles/timestamps of all screenshots rendered on the dashboard."""
+        self.page.wait_for_selector("a[title*='-sc'], div.screenshot-thumb, div.sc-container", timeout=10000)
+        titles: List[str] = []
+        count = self.screenshot_cards.count()
+        for i in range(count):
+            title = self.screenshot_cards.nth(i).get_attribute("title")
+            if title:
+                titles.append(title)
+        return titles
+
     def inspect_first_screenshot(self) -> str:
         """Opens first screenshot in preview lightbox, verifies rendering, and returns its title/timestamp."""
         first_sc = self.screenshot_cards.first

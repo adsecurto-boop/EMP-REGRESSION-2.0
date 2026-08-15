@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Play, CheckCircle2, AlertTriangle, XCircle, ShieldAlert, Layers, RefreshCw, FileText,
   Server, Activity, ChevronRight, Monitor, Globe, Download, Github, Cpu, Radio, Sparkles,
-  Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal, Filter, Search, ArrowUpCircle
+  Bell, X, Info, ExternalLink, Check, Copy, Trash2, Terminal, Filter, Search, ArrowUpCircle,
+  Clock, Timer, Sliders
 } from 'lucide-react';
 import { FeatureProfile, StructuredReport } from './types';
 import { ReportViewer } from './components/ReportViewer';
@@ -148,9 +149,44 @@ export default function App() {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'features' | 'console' | 'report' | 'logs'>('desktop');
+  const [activeTab, setActiveTab] = useState<'desktop' | 'chrome' | 'frequency' | 'features' | 'console' | 'report' | 'logs'>('desktop');
   const [logs, setLogs] = useState<string>('');
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
+
+  // Frequency & Cadence Validator State (EM010_Screenshots)
+  const [expectedIntervalSec, setExpectedIntervalSec] = useState<number>(60);
+  const [toleranceSec, setToleranceSec] = useState<number>(15);
+  const [screenshotTitlesText, setScreenshotTitlesText] = useState<string>(
+    "-08-15 18:00:31-sc0\n-08-15 18:01:32-sc0\n-08-15 18:02:30-sc0\n-08-15 18:03:32-sc0"
+  );
+  const [frequencyData, setFrequencyData] = useState<any>(null);
+  const [isCalculatingFrequency, setIsCalculatingFrequency] = useState<boolean>(false);
+
+  const handleRunFrequencyValidation = (customInterval?: number, customTolerance?: number, customTitles?: string[]) => {
+    setIsCalculatingFrequency(true);
+    const interval = customInterval !== undefined ? customInterval : expectedIntervalSec;
+    const tolerance = customTolerance !== undefined ? customTolerance : toleranceSec;
+    const titles = customTitles || screenshotTitlesText.split('\n').map(s => s.trim()).filter(Boolean);
+
+    fetch(`${API_BASE}/api/validate/frequency`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedIntervalSec: interval,
+        toleranceSec: tolerance,
+        titles
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setFrequencyData(data);
+        setIsCalculatingFrequency(false);
+      })
+      .catch(err => {
+        console.error('Frequency validation error:', err);
+        setIsCalculatingFrequency(false);
+      });
+  };
 
   const [logFilterCategory, setLogFilterCategory] = useState<'ALL' | 'AUTO_UPDATE' | 'RUN_SUITE' | 'CHROME_INSPECTOR' | 'SYSTEM'>('ALL');
   const [logSearchTerm, setLogSearchTerm] = useState<string>('');
@@ -365,6 +401,7 @@ export default function App() {
       .catch((err) => console.warn('Jenkins info fetch notice:', err));
 
     handleFetchLatestReport();
+    handleRunFrequencyValidation(60, 15);
 
     // Listen to Electron IPC auto updater events if running inside Electron desktop app
     if ((window as any).electronAPI) {
@@ -828,6 +865,18 @@ export default function App() {
             >
               <Globe className="w-4 h-4" />
               <span>Chrome Dashboard Inspector</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('frequency')}
+              className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition ${
+                activeTab === 'frequency'
+                  ? 'border-cyan-500 text-cyan-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Clock className="w-4 h-4 text-cyan-400" />
+              <span>Frequency & Cadence (EM010)</span>
+              <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold">1-Min Sync</span>
             </button>
             <button
               onClick={() => setActiveTab('features')}
@@ -1388,6 +1437,308 @@ export default function App() {
                     ) : (
                       <span className="text-slate-600">Click "Run Chrome Check" to launch the browser test script.</span>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'frequency' && (
+              <div className="space-y-6">
+                {/* Cadence Overview Header Banner */}
+                <div className="bg-gradient-to-r from-cyan-950/60 to-slate-900 border border-cyan-500/30 rounded-xl p-6 relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center space-x-2.5 mb-1.5">
+                        <Clock className="w-5 h-5 text-cyan-400" />
+                        <h3 className="text-base font-bold text-white">EM010 Screenshot Frequency & Cadence Validator</h3>
+                        <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
+                          L1-L4 Correlated
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                        Validates that screenshots are captured and uploaded strictly on a <strong>1-minute cadence (60s)</strong> by comparing timestamps across
+                        Configuration (L1), SQLite storage (L2), Ingestion pipeline (L3), and Dashboard UI cards (L4) within ±{toleranceSec}s tolerance.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-3 shrink-0">
+                      <button
+                        onClick={() => handleRunFrequencyValidation()}
+                        disabled={isCalculatingFrequency}
+                        className="flex items-center space-x-2 px-4 py-2 text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg shadow-lg shadow-cyan-600/30 transition disabled:opacity-50 cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCalculatingFrequency ? 'animate-spin' : ''}`} />
+                        <span>{isCalculatingFrequency ? 'Evaluating...' : 'Run Cadence Check'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4-Layer Cadence Architecture Flow */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-indigo-400">LAYER 1: CONFIG</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">screenshotPeriodSec = {expectedIntervalSec}s</div>
+                    <div className="text-xs text-slate-400 font-mono">empm.ini / remote config</div>
+                    <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                      Target: 60 captures/hour (1 cycle per 60 seconds).
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-amber-400">LAYER 2: PERSISTENCE</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">pending_screenshots6</div>
+                    <div className="text-xs text-slate-400 font-mono">SQLite created_at timestamp</div>
+                    <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                      esr.exe captures desktop bitmap and queues row.
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-purple-400">LAYER 3: INGESTION</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">POST /add-activity</div>
+                    <div className="text-xs text-slate-400 font-mono">upload_cycle_trigger log</div>
+                    <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                      Synchronizes screenshot payload with EmpMonitor cloud.
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-cyan-400">LAYER 4: DASHBOARD</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">Web Screenshots Tab</div>
+                    <div className="text-xs text-slate-400 font-mono">DOM title attribute timestamp</div>
+                    <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                      Playwright extracts rendered thumbnail card timestamps.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Configuration and Interval Simulator */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Controls */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+                        <Sliders className="w-4 h-4 text-indigo-400" />
+                        <span>Cadence Parameters</span>
+                      </h4>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Expected Interval (Seconds)</label>
+                        <div className="flex space-x-2">
+                          <input
+                            type="number"
+                            value={expectedIntervalSec}
+                            onChange={(e) => setExpectedIntervalSec(Number(e.target.value))}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
+                          />
+                          <button
+                            onClick={() => { setExpectedIntervalSec(60); }}
+                            className="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700"
+                          >
+                            60s (1m)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Drift Tolerance (± Seconds)</label>
+                        <input
+                          type="number"
+                          value={toleranceSec}
+                          onChange={(e) => setToleranceSec(Number(e.target.value))}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">UI Screenshot Card Titles / Timestamps</label>
+                        <textarea
+                          value={screenshotTitlesText}
+                          onChange={(e) => setScreenshotTitlesText(e.target.value)}
+                          rows={5}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-500 resize-none leading-relaxed"
+                          placeholder="Enter one title per line..."
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-2 pt-2">
+                        <button
+                          onClick={() => {
+                            setScreenshotTitlesText("-08-15 18:00:31-sc0\n-08-15 18:01:32-sc0\n-08-15 18:02:30-sc0\n-08-15 18:03:32-sc0");
+                            handleRunFrequencyValidation(60, 15, ["-08-15 18:00:31-sc0", "-08-15 18:01:32-sc0", "-08-15 18:02:30-sc0", "-08-15 18:03:32-sc0"]);
+                          }}
+                          className="flex-1 py-1.5 text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-center cursor-pointer"
+                        >
+                          Load Healthy 1m Data
+                        </button>
+                        <button
+                          onClick={() => {
+                            setScreenshotTitlesText("-08-15 18:00:00-sc0\n-08-15 18:03:00-sc0\n-08-15 18:03:20-sc0");
+                            handleRunFrequencyValidation(60, 15, ["-08-15 18:00:00-sc0", "-08-15 18:03:00-sc0", "-08-15 18:03:20-sc0"]);
+                          }}
+                          className="flex-1 py-1.5 text-[11px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg border border-rose-500/30 text-center cursor-pointer"
+                        >
+                          Simulate Drift Error
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Calculated Intervals and Drift Status */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+                          <Activity className="w-4 h-4 text-cyan-400" />
+                          <span>Calculated Intervals & Drift Evaluation</span>
+                        </h4>
+                        {frequencyData && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
+                              frequencyData.verdict === 'HEALTHY'
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            Verdict: {frequencyData.verdict}
+                          </span>
+                        )}
+                      </div>
+
+                      {frequencyData ? (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                              <div className="text-[10px] text-slate-400 uppercase">Target Interval</div>
+                              <div className="text-base font-bold font-mono text-cyan-400">{frequencyData.expected_interval_sec}s (1m)</div>
+                            </div>
+                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                              <div className="text-[10px] text-slate-400 uppercase">Tolerance</div>
+                              <div className="text-base font-bold font-mono text-slate-200">±{frequencyData.tolerance_sec}s</div>
+                            </div>
+                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                              <div className="text-[10px] text-slate-400 uppercase">Max Observed Drift</div>
+                              <div className={`text-base font-bold font-mono ${frequencyData.max_drift_sec <= frequencyData.tolerance_sec ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {frequencyData.max_drift_sec?.toFixed(1)}s
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto border border-slate-800 rounded-lg">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                                <tr>
+                                  <th className="p-2.5 font-medium">Cycle</th>
+                                  <th className="p-2.5 font-medium">From</th>
+                                  <th className="p-2.5 font-medium">To</th>
+                                  <th className="p-2.5 font-medium">Actual Delta</th>
+                                  <th className="p-2.5 font-medium">Expected</th>
+                                  <th className="p-2.5 font-medium">Drift</th>
+                                  <th className="p-2.5 font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800/60 font-mono">
+                                {frequencyData.cycles?.map((c: any, idx: number) => (
+                                  <tr key={idx} className="hover:bg-slate-800/30">
+                                    <td className="p-2.5 text-slate-400">#{idx + 1}</td>
+                                    <td className="p-2.5 text-slate-300">{c.from}</td>
+                                    <td className="p-2.5 text-slate-300">{c.to}</td>
+                                    <td className="p-2.5 font-bold text-slate-200">{c.actual_interval_sec}s</td>
+                                    <td className="p-2.5 text-slate-400">{c.expected_interval_sec}s</td>
+                                    <td className="p-2.5 text-slate-300">{c.drift_sec?.toFixed(1)}s</td>
+                                    <td className="p-2.5">
+                                      <span
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                          c.status === 'PASS'
+                                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                            : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                        }`}
+                                      >
+                                        {c.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-500 text-xs">
+                          Click "Run Cadence Check" to compute intervals.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Multi-Layer Correlation & Failure Mode Resolution Matrix */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
+                        <ShieldAlert className="w-4 h-4 text-indigo-400" />
+                        <span>Correlation & Failure Mode Resolution Matrix (L1 - L4)</span>
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Systematic cross-layer root cause detection for screenshot capture, persistence, ingestion, and UI rendering.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-800 rounded-lg">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-3 font-semibold">Failure Mode</th>
+                          <th className="p-3 font-semibold">Layer Boundary</th>
+                          <th className="p-3 font-semibold">Automated Detection Mechanism</th>
+                          <th className="p-3 font-semibold">Evaluation Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {frequencyData?.failure_modes?.map((fm: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-800/40 transition">
+                            <td className="p-3 font-medium text-slate-200 flex items-center space-x-2">
+                              {fm.detected ? (
+                                <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              )}
+                              <span>{fm.mode}</span>
+                            </td>
+                            <td className="p-3 font-mono text-indigo-300">{fm.layerBoundary}</td>
+                            <td className="p-3 text-slate-400 font-mono text-[11px]">{fm.detectionMechanism}</td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-medium font-mono ${
+                                  fm.detected
+                                    ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                }`}
+                              >
+                                {fm.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

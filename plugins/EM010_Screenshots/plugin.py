@@ -31,6 +31,7 @@ from framework.core.correlation import Correlation
 from framework.dashboard.screenshots_collector import PlaywrightScreenshotsDashboardCollector
 from framework.shared.interfaces import Collector, Validator
 from framework.shared.models import Evidence, ValidationContext
+from framework.validators.frequency import ScreenshotCadenceValidator
 from plugins.base import FeatureValidationPlugin
 
 __all__ = ["ScreenshotsPlugin"]
@@ -50,8 +51,10 @@ class ScreenshotsPlugin(FeatureValidationPlugin):
         return tuple(filtered)
 
     def validators(self) -> Sequence[Validator]:
-        """Validators this feature needs."""
-        return super().validators()
+        """Validators this feature needs, adding the multi-layer cadence validator."""
+        vals = list(super().validators())
+        vals.append(ScreenshotCadenceValidator(tolerance_seconds=15))
+        return tuple(vals)
 
     def correlate(
         self, context: ValidationContext, evidence: Sequence[Evidence]
