@@ -1,0 +1,10 @@
+{
+  "version": "0.1.3",
+  "release_date": "2026-08-15T17:31:13Z",
+  "url": "https://updates.yourdomain.com/empmonitor-setup-0.1.3.exe",
+  "sha256": "33f9939526d5c350580a086f49a7b92fc66a68ff79a46c82677dcd98a8dd1603",
+  "file_size_bytes": 28,
+  "mandatory": false,
+  "channel": "stable",
+  "notes": "EmpMonitor Desktop Suite 0.1.3 automated release build."
+}

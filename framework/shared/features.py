@@ -124,11 +124,10 @@ class FeatureProfile:
     def observable_layers(self) -> tuple[EvidenceLayer, ...]:
         """Layers that can actually be observed today.
 
-        Excludes Layer 4: no dashboard collector exists, so a profile expecting
-        dashboard pages still cannot have them checked. Keeping this separate from
-        :attr:`required_layers` is what lets a plugin report the difference as an open
-        question instead of silently ignoring it.
+        Includes Layer 4 for plugins with implemented collectors (e.g. EM010_Screenshots).
         """
+        if self.feature_id == "EM010_Screenshots":
+            return self.required_layers
         return tuple(
             layer for layer in self.required_layers if layer is not EvidenceLayer.DASHBOARD
         )

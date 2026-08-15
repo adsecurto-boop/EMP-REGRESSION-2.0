@@ -2,9 +2,12 @@ pipeline {
     agent any
 
     environment {
-        // GitHub Token credential configured in Jenkins Credentials Manager
-        GH_TOKEN = credentials('github-release-token')
-        GITHUB_TOKEN = credentials('github-release-token')
+        // Cloudflare R2 S3-Compatible Endpoint & Bucket Configuration
+        R2_ACCOUNT_ID = "ca2a4c1cb15c70abc670f34aecbd5084"
+        R2_ENDPOINT = "https://ca2a4c1cb15c70abc670f34aecbd5084.r2.cloudflarestorage.com"
+        R2_BUCKET = "s3://empmonitor-updates"
+        BASE_URL = "https://updates.yourdomain.com"
+        AWS_DEFAULT_REGION = "auto"
     }
 
     stages {
@@ -93,11 +96,13 @@ pipeline {
                     def pkgContent = readFile('package.json')
                     def versionMatch = pkgContent =~ /"version":\s*"([^"]+)"/
                     if (versionMatch) {
+                        env.RAW_VERSION = versionMatch[0][1]
                         env.APP_VERSION = "v" + versionMatch[0][1]
                     } else {
+                        env.RAW_VERSION = "1.0.0"
                         env.APP_VERSION = "v1.0.0"
                     }
-                    echo "Target Release Version: ${env.APP_VERSION}"
+                    echo "Target Release Version: ${env.APP_VERSION} (Raw: ${env.RAW_VERSION})"
                     
                     // Set Jenkins Build Display and Description with Git Commit Message
                     currentBuild.displayName = "#${BUILD_NUMBER} - ${env.APP_VERSION}"
@@ -106,20 +111,114 @@ pipeline {
             }
         }
 
-        stage('Package Desktop EXE & Publish Update') {
+        stage('Package Desktop Binary') {
             steps {
                 script {
-                    echo "Publishing release artifacts to GitHub for Auto-Updater feed..."
+                    echo "Packaging Electron Windows Executable Installer and Portable Binary..."
                     if (isUnix()) {
                         sh '''
-                            npx electron-builder --config electron-builder.json --publish always
+                            npx electron-builder --config electron-builder.json --publish never
                         '''
                     } else {
                         bat '''
                             @echo off
-                            call npx electron-builder --config electron-builder.json --publish always
+                            call npx electron-builder --config electron-builder.json --publish never
                             exit /b %ERRORLEVEL%
                         '''
+                    }
+                }
+            }
+        }
+
+        stage('Publish to Cloudflare R2') {
+            steps {
+                script {
+                    echo "Publishing binaries and auto-update manifest to Cloudflare R2 bucket (${R2_BUCKET})..."
+                    
+                    withCredentials([usernamePassword(
+                        credentialsId: 'cloudflare-r2-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )]) {
+                        if (isUnix()) {
+                            sh '''
+                                set -e
+                                # 1. Locate generated Windows installer executable
+                                BINARY_EXE=$(find dist-electron -maxdepth 1 -name "*.exe" | head -n 1)
+                                if [ -z "$BINARY_EXE" ]; then
+                                    echo "ERROR: No .exe binary found in dist-electron/"
+                                    exit 1
+                                fi
+                                BINARY_NAME=$(basename "$BINARY_EXE")
+                                echo "Selected binary for release: ${BINARY_EXE} (${BINARY_NAME})"
+
+                                # 2. Generate latest.json manifest with SHA-256 and release metadata
+                                python3 scripts/generate_update_manifest.py \
+                                    --binary-path "$BINARY_EXE" \
+                                    --version "${RAW_VERSION}" \
+                                    --base-url "${BASE_URL}" \
+                                    --output-manifest "dist-electron/latest.json" \
+                                    --notes "Automated release build for commit ${GIT_COMMIT_HASH}: ${GIT_COMMIT_MSG}"
+
+                                # 3. Upload Binary Executable to Cloudflare R2 (Immutable Long-Term Cache)
+                                echo "Uploading ${BINARY_NAME} to Cloudflare R2..."
+                                aws s3 cp "$BINARY_EXE" "${R2_BUCKET}/${BINARY_NAME}" \
+                                    --endpoint-url "${R2_ENDPOINT}" \
+                                    --cache-control "public, max-age=31536000, immutable"
+
+                                # 4. Upload latest.json Manifest (Strict No-Cache Policy)
+                                echo "Uploading latest.json manifest to Cloudflare R2..."
+                                aws s3 cp "dist-electron/latest.json" "${R2_BUCKET}/latest.json" \
+                                    --endpoint-url "${R2_ENDPOINT}" \
+                                    --cache-control "no-cache, no-store, must-revalidate"
+
+                                echo "Cloudflare R2 auto-update release complete: ${BASE_URL}/latest.json"
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                setlocal enabledelayedexpansion
+
+                                :: 1. Locate generated Windows installer executable
+                                set "BINARY_EXE="
+                                for %%F in (dist-electron\\*.exe) do (
+                                    if not defined BINARY_EXE set "BINARY_EXE=%%F"
+                                )
+
+                                if not defined BINARY_EXE (
+                                    echo ERROR: No .exe binary found in dist-electron\\
+                                    exit /b 1
+                                )
+
+                                for %%I in ("%BINARY_EXE%") do set "BINARY_NAME=%%~nxI"
+                                echo Selected binary for release: %BINARY_EXE% (%BINARY_NAME%)
+
+                                :: 2. Generate latest.json manifest with SHA-256 and release metadata
+                                python scripts\\generate_update_manifest.py ^
+                                    --binary-path "%BINARY_EXE%" ^
+                                    --version "%RAW_VERSION%" ^
+                                    --base-url "%BASE_URL%" ^
+                                    --output-manifest "dist-electron\\latest.json" ^
+                                    --notes "Automated release build for commit %GIT_COMMIT_HASH%: %GIT_COMMIT_MSG%"
+                                if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+
+                                :: 3. Upload Binary Executable to Cloudflare R2 (Immutable Long-Term Cache)
+                                echo Uploading %BINARY_NAME% to Cloudflare R2...
+                                aws s3 cp "%BINARY_EXE%" "%R2_BUCKET%/%BINARY_NAME%" ^
+                                    --endpoint-url "%R2_ENDPOINT%" ^
+                                    --cache-control "public, max-age=31536000, immutable"
+                                if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+
+                                :: 4. Upload latest.json Manifest (Strict No-Cache Policy)
+                                echo Uploading latest.json manifest to Cloudflare R2...
+                                aws s3 cp "dist-electron\\latest.json" "%R2_BUCKET%/latest.json" ^
+                                    --endpoint-url "%R2_ENDPOINT%" ^
+                                    --cache-control "no-cache, no-store, must-revalidate"
+                                if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+
+                                echo Cloudflare R2 auto-update release complete: %BASE_URL%/latest.json
+                            '''
+                        }
                     }
                 }
             }
@@ -128,11 +227,11 @@ pipeline {
 
     post {
         always {
-            // Archive installer, portable binary, and latest.yml auto-updater manifest
-            archiveArtifacts artifacts: 'dist-electron/*.exe, dist-electron/latest.yml', fingerprint: true, allowEmptyArchive: true
+            // Archive installer, portable binary, and latest.json auto-updater manifest
+            archiveArtifacts artifacts: 'dist-electron/*.exe, dist-electron/latest.json, dist-electron/latest.yml', fingerprint: true, allowEmptyArchive: true
         }
         success {
-            echo "Successfully built and published EmpMonitor Desktop Suite ${env.APP_VERSION} for commit '${env.GIT_COMMIT_MSG}'"
+            echo "Successfully built and published EmpMonitor Desktop Suite ${env.APP_VERSION} to Cloudflare R2 for commit '${env.GIT_COMMIT_MSG}'"
         }
         failure {
             echo "Jenkins build failed. Check console output for diagnostic details."

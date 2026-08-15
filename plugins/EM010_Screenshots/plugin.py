@@ -33,6 +33,7 @@ from framework.shared.interfaces import Collector, Validator
 from framework.shared.models import Evidence, ValidationContext
 from framework.validators.frequency import ScreenshotCadenceValidator
 from plugins.base import FeatureValidationPlugin
+from plugins.EM010_Screenshots.screenshot_correlation_reducer import ScreenshotsCorrelationReducer
 
 __all__ = ["ScreenshotsPlugin"]
 
@@ -59,8 +60,8 @@ class ScreenshotsPlugin(FeatureValidationPlugin):
     def correlate(
         self, context: ValidationContext, evidence: Sequence[Evidence]
     ) -> Sequence[Correlation]:
-        """Relate this feature's observations across layers."""
-        return super().correlate(context, evidence)
+        """Relate this feature's observations across layers using ScreenshotsCorrelationReducer."""
+        return ScreenshotsCorrelationReducer.to_framework_correlations(evidence)
 
     def feature_summary(self) -> Mapping[str, Any]:
         """Return detail specific to Screenshots."""

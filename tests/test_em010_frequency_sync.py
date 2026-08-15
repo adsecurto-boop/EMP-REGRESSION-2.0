@@ -24,6 +24,9 @@ from typing import List, Dict, Any
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from screenshot_frequency_validator import ScreenshotFrequencyValidator
+from plugins.EM010_Screenshots.screenshot_correlation_reducer import ScreenshotsCorrelationReducer
+from plugins.EM010_Screenshots.plugin import ScreenshotsPlugin
+from framework.shared.models import Evidence, EvidenceLayer, SourceReliability, ValidationContext, EnvironmentInfo, Verdict, Confidence
 
 AUTH_FILE = "playwright-profile/auth.json"
 
@@ -64,6 +67,81 @@ class TestScreenshotFrequencySync(unittest.TestCase):
         self.assertEqual(len(drift_reports), 3)
         for report in drift_reports:
             self.assertEqual(report["status"], "PASS")
+
+    def test_correlation_reducer_healthy_reduction(self):
+        """Validates ScreenshotsCorrelationReducer generates full cross-layer convergence."""
+        l1_config = {"screenshot_enabled": 1}
+        l2_runtime = {"table_present": 1, "persisted_count": 4}
+        l3_telemetry = {"synced_count": 4}
+        l4_dashboard = {
+            "rendered_count": 4,
+            "collector_active": True,
+            "cadence_evaluation": {
+                "passed": True,
+                "max_drift": 2.0,
+                "notes": [
+                    "Cycle 18:00:31 -> 18:01:32: 61.0s (PASS)",
+                    "Cycle 18:01:32 -> 18:02:30: 58.0s (PASS)",
+                    "Cycle 18:02:30 -> 18:03:32: 62.0s (PASS)"
+                ]
+            }
+        }
+
+        reduced = ScreenshotsCorrelationReducer.reduce(
+            l1_config=l1_config,
+            l2_runtime=l2_runtime,
+            l3_telemetry=l3_telemetry,
+            l4_dashboard=l4_dashboard
+        )
+
+        summary = reduced["summary"]
+        self.assertEqual(summary["overall_verdict"], "HEALTHY")
+        self.assertEqual(summary["confidence"], "HIGH")
+        self.assertEqual(summary["layers_not_observable"], [])
+        self.assertEqual(summary["correlations"]["counts"]["AGREES"], 2)
+        self.assertEqual(summary["correlations"]["counts"]["INDETERMINATE"], 0)
+        self.assertEqual(len(reduced["correlations"]), 2)
+        self.assertEqual(reduced["correlations"][0]["agreement"], "AGREES")
+        self.assertEqual(reduced["correlations"][1]["agreement"], "AGREES")
+
+    def test_plugin_correlate_with_mock_evidence(self):
+        """Validates ScreenshotsPlugin produce agreed cross-layer correlations."""
+        plugin = ScreenshotsPlugin()
+        ev1 = Evidence(
+            evidence_id="EV-001",
+            layer=EvidenceLayer.CONFIGURATION,
+            source="config:empm.ini",
+            summary="config verified",
+            collector="config.collector",
+            reliability=SourceReliability.HIGH,
+            data={"screenshotQuality": 80, "screenshotPeriodSec": 60}
+        )
+        ev3 = Evidence(
+            evidence_id="EV-003",
+            layer=EvidenceLayer.RUNTIME,
+            source="sqlite:pending_screenshots6",
+            summary="sqlite table verified",
+            collector="sqlite.collector",
+            reliability=SourceReliability.HIGH,
+            data={"tables": ["pending_screenshots6"], "row_count": 4}
+        )
+        ev13 = Evidence(
+            evidence_id="EV-013",
+            layer=EvidenceLayer.DASHBOARD,
+            source="dashboard:screenshots",
+            summary="dashboard screenshots verified",
+            collector="dashboard.screenshots.playwright",
+            reliability=SourceReliability.HIGH,
+            data={"state": "observed", "reached": True, "rendered_screenshot_count": 4}
+        )
+
+        ctx = ValidationContext(execution_id="test_run", environment=EnvironmentInfo(name="test_env"))
+        corrs = plugin.correlate(ctx, [ev1, ev3, ev13])
+        self.assertEqual(len(corrs), 2)
+        self.assertEqual(corrs[0].agreement.value, "AGREES")
+        self.assertEqual(corrs[1].agreement.value, "AGREES")
+        self.assertEqual(corrs[1].left, "persisted: 4")
+        self.assertEqual(corrs[1].right, "rendered: 4")
 
     def test_failure_mode_detection_scenarios(self):
         """
