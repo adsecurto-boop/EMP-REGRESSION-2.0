@@ -173,25 +173,15 @@ pipeline {
                                 BINARY_NAME=$(basename "$BINARY_EXE")
                                 echo "Selected binary for release: ${BINARY_EXE} (${BINARY_NAME})"
 
-                                # 2. Generate latest.json manifest with SHA-256 and release metadata
-                                node scripts/generate_update_manifest.mjs \
+                                # 2. Generate latest.json manifest and publish directly to Cloudflare R2
+                                node scripts/publish_r2.mjs \
                                     --binary-path "$BINARY_EXE" \
                                     --version "${RAW_VERSION}" \
                                     --base-url "${BASE_URL}" \
+                                    --bucket "${R2_BUCKET}" \
+                                    --endpoint "${R2_ENDPOINT}" \
                                     --output-manifest "dist-electron/latest.json" \
                                     --notes "Automated release build for commit ${GIT_COMMIT_HASH}: ${GIT_COMMIT_MSG}"
-
-                                # 3. Upload Binary Executable to Cloudflare R2 (Immutable Long-Term Cache)
-                                echo "Uploading ${BINARY_NAME} to Cloudflare R2..."
-                                aws s3 cp "$BINARY_EXE" "${R2_BUCKET}/${BINARY_NAME}" \
-                                    --endpoint-url "${R2_ENDPOINT}" \
-                                    --cache-control "public, max-age=31536000, immutable"
-
-                                # 4. Upload latest.json Manifest (Strict No-Cache Policy)
-                                echo "Uploading latest.json manifest to Cloudflare R2..."
-                                aws s3 cp "dist-electron/latest.json" "${R2_BUCKET}/latest.json" \
-                                    --endpoint-url "${R2_ENDPOINT}" \
-                                    --cache-control "no-cache, no-store, must-revalidate"
 
                                 echo "Cloudflare R2 auto-update release complete: ${BASE_URL}/latest.json"
                             '''
@@ -214,27 +204,15 @@ pipeline {
                                 for %%I in ("%BINARY_EXE%") do set "BINARY_NAME=%%~nxI"
                                 echo Selected binary for release: %BINARY_EXE% (%BINARY_NAME%)
 
-                                :: 2. Generate latest.json manifest with SHA-256 and release metadata
-                                node scripts\\generate_update_manifest.mjs ^
+                                :: 2. Generate latest.json manifest and publish directly to Cloudflare R2
+                                node scripts\\publish_r2.mjs ^
                                     --binary-path "%BINARY_EXE%" ^
                                     --version "%RAW_VERSION%" ^
                                     --base-url "%BASE_URL%" ^
+                                    --bucket "%R2_BUCKET%" ^
+                                    --endpoint "%R2_ENDPOINT%" ^
                                     --output-manifest "dist-electron\\latest.json" ^
                                     --notes "Automated release build for commit %GIT_COMMIT_HASH%: %GIT_COMMIT_MSG%"
-                                if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
-
-                                :: 3. Upload Binary Executable to Cloudflare R2 (Immutable Long-Term Cache)
-                                echo Uploading %BINARY_NAME% to Cloudflare R2...
-                                aws s3 cp "%BINARY_EXE%" "%R2_BUCKET%/%BINARY_NAME%" ^
-                                    --endpoint-url "%R2_ENDPOINT%" ^
-                                    --cache-control "public, max-age=31536000, immutable"
-                                if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
-
-                                :: 4. Upload latest.json Manifest (Strict No-Cache Policy)
-                                echo Uploading latest.json manifest to Cloudflare R2...
-                                aws s3 cp "dist-electron\\latest.json" "%R2_BUCKET%/latest.json" ^
-                                    --endpoint-url "%R2_ENDPOINT%" ^
-                                    --cache-control "no-cache, no-store, must-revalidate"
                                 if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
 
                                 echo Cloudflare R2 auto-update release complete: %BASE_URL%/latest.json
