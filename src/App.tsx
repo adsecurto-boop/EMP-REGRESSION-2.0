@@ -969,17 +969,17 @@ export default function App() {
                         <Github className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">GitHub CI/CD & EXE Packaging</h4>
-                        <p className="text-xs text-slate-400">Automated builds & releases</p>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">CI/CD & Desktop EXE Packaging</h4>
+                        <p className="text-xs text-slate-400">Jenkins Pipeline & GitHub Releases</p>
                       </div>
                     </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Repository</span>
-                        <span className="text-indigo-400 font-mono font-medium">{desktopStatus?.githubRepo || 'adsecurto-boop/Emp_Regression_suite'}</span>
+                        <span className="text-slate-400">Pipeline Config</span>
+                        <span className="text-indigo-400 font-mono font-medium">Jenkinsfile (Zero Compute Cost)</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
-                        <span className="text-slate-400">Workflow File</span>
+                        <span className="text-slate-400">Workflow Fallback</span>
                         <span className="text-slate-200 font-mono">.github/workflows/build-desktop-exe.yml</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-800">
@@ -992,11 +992,11 @@ export default function App() {
 
                 {/* Instructions */}
                 <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How Changes Auto-Reflect in Desktop EXE</h4>
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">How to Build & Auto-Update via Jenkins</h4>
                   <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2">
-                    <li><strong className="text-slate-200">Commit & Push:</strong> Whenever you commit code changes to the GitHub repository, GitHub Actions automatically triggers <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">build-desktop-exe.yml</code>.</li>
-                    <li><strong className="text-slate-200">Executable Artifact Generation:</strong> The GitHub runner compiles the web application, packages Electron desktop files, generates <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">.exe</code> installer & <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">latest.yml</code> manifest.</li>
-                    <li><strong className="text-slate-200">Auto-Update:</strong> When users launch the desktop app on Windows, <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">electron-updater</code> automatically fetches the update from GitHub Releases and prompts to restart & install.</li>
+                    <li><strong className="text-slate-200">Self-Hosted Jenkins:</strong> Runs on your own machine/server with Node.js & Python installed (100% free with no GitHub Actions compute charges).</li>
+                    <li><strong className="text-slate-200">Automated Packaging:</strong> Jenkins runs <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npm run build</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">npx electron-builder --publish always</code> using the included <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">Jenkinsfile</code>.</li>
+                    <li><strong className="text-slate-200">Seamless Auto-Updates:</strong> The built <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">.exe</code> and <code className="text-indigo-400 bg-slate-800 px-1.5 py-0.5 rounded">latest.yml</code> are published to GitHub Releases (or your HTTP server) so installed desktop apps automatically detect and download updates.</li>
                   </ol>
                 </div>
               </div>
