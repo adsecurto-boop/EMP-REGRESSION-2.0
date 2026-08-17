@@ -488,3 +488,44 @@ ipcMain.handle('append-log', (_event, logData) => {
   logToFile(validLevel, category || 'CLIENT', message || 'Client event logged', details);
   return { success: true };
 });
+
+ipcMain.handle('list-evidence-files', () => {
+  try {
+    const fs = require('fs');
+    const evidenceDir = path.join(__dirname, '../reports/evidence');
+    if (!fs.existsSync(evidenceDir)) {
+      return { success: true, files: [] };
+    }
+    const files = fs.readdirSync(evidenceDir);
+    const items = files.map((filename) => {
+      const fullPath = path.join(evidenceDir, filename);
+      const stat = fs.statSync(fullPath);
+      return {
+        filename,
+        fullPath,
+        sizeBytes: stat.size,
+        mtime: stat.mtime.toISOString(),
+        isScreenshot: filename.toLowerCase().endsWith('.png') || filename.toLowerCase().endsWith('.jpg'),
+        isEV013: filename.includes('EV-013') || filename.includes('PROOF') || filename.includes('EV-')
+      };
+    });
+    return { success: true, files: items };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err), files: [] };
+  }
+});
+
+ipcMain.handle('read-evidence-file', (_event, filename) => {
+  try {
+    const fs = require('fs');
+    const safeName = path.basename(filename);
+    const fullPath = path.join(__dirname, '../reports/evidence', safeName);
+    if (!fs.existsSync(fullPath)) {
+      return { success: false, error: 'File not found' };
+    }
+    const buf = fs.readFileSync(fullPath);
+    return { success: true, base64: buf.toString('base64'), mimeType: safeName.endsWith('.png') ? 'image/png' : 'application/octet-stream' };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err) };
+  }
+});

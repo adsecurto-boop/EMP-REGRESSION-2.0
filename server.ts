@@ -461,6 +461,126 @@ async function startServer() {
     return res.status(404).json({ error: "No report file found to download." });
   });
 
+  // API to list all available evidence files (EV-013 proof screenshots, HTML reports, JSON reports)
+  app.get("/api/evidence/list", (req, res) => {
+    const execDir = getUnpackedPath(ROOT_DIR);
+    const evidenceDirs = [
+      path.join(execDir, "reports", "evidence"),
+      path.join(ROOT_DIR, "reports", "evidence"),
+      path.join(USER_DATA_DIR, "reports", "evidence"),
+      path.join(execDir, "reports"),
+      path.join(ROOT_DIR, "reports"),
+      path.join(USER_DATA_DIR, "reports")
+    ];
+
+    const evidenceFiles: Array<{
+      filename: string;
+      relativePath: string;
+      sizeBytes: number;
+      mtime: string;
+      type: "screenshot_proof" | "html_report" | "json_report" | "other";
+      evidenceId?: string;
+    }> = [];
+
+    const seenNames = new Set<string>();
+
+    for (const dir of evidenceDirs) {
+      if (fs.existsSync(dir)) {
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            if (stat.isFile() && !seenNames.has(file)) {
+              seenNames.add(file);
+              const isPng = file.toLowerCase().endsWith(".png");
+              const isHtml = file.toLowerCase().endsWith(".html");
+              const isJson = file.toLowerCase().endsWith(".json");
+
+              let type: "screenshot_proof" | "html_report" | "json_report" | "other" = "other";
+              let evidenceId: string | undefined = undefined;
+
+              if (file.includes("EV-013") || file.includes("EV-") || (isPng && file.toLowerCase().includes("proof"))) {
+                type = "screenshot_proof";
+                const evMatch = file.match(/EV-\d+/i);
+                if (evMatch) evidenceId = evMatch[0].toUpperCase();
+              } else if (isHtml) {
+                type = "html_report";
+              } else if (isJson) {
+                type = "json_report";
+              }
+
+              evidenceFiles.push({
+                filename: file,
+                relativePath: path.relative(execDir, fullPath),
+                sizeBytes: stat.size,
+                mtime: stat.mtime.toISOString(),
+                type,
+                evidenceId: evidenceId || (type === "screenshot_proof" ? "EV-013" : undefined)
+              });
+            }
+          }
+        } catch (e) {
+          // ignore directory read errors
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      count: evidenceFiles.length,
+      evidenceFiles
+    });
+  });
+
+  // API to fetch individual evidence file content / download
+  app.get("/api/evidence/file/:filename", (req, res) => {
+    const rawFilename = path.basename(req.params.filename);
+    const execDir = getUnpackedPath(ROOT_DIR);
+    const candidateDirs = [
+      path.join(execDir, "reports", "evidence"),
+      path.join(ROOT_DIR, "reports", "evidence"),
+      path.join(USER_DATA_DIR, "reports", "evidence"),
+      path.join(execDir, "reports"),
+      path.join(ROOT_DIR, "reports"),
+      path.join(USER_DATA_DIR, "reports")
+    ];
+
+    for (const dir of candidateDirs) {
+      const target = path.join(dir, rawFilename);
+      if (fs.existsSync(target) && fs.statSync(target).isFile()) {
+        if (rawFilename.endsWith(".png")) {
+          res.setHeader("Content-Type", "image/png");
+        } else if (rawFilename.endsWith(".html")) {
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+        } else if (rawFilename.endsWith(".json")) {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+        } else {
+          res.setHeader("Content-Type", "application/octet-stream");
+        }
+        return fs.createReadStream(target).pipe(res);
+      }
+    }
+
+    return res.status(404).json({ error: `Evidence file ${rawFilename} not found.` });
+  });
+
+  // API to export ZIP package directly from server
+  app.get("/api/report/export-zip", (req, res) => {
+    const execDir = getUnpackedPath(ROOT_DIR);
+    const latestInfo = getLatestReportData(execDir);
+    const executionId = latestInfo?.report?.metadata?.execution_id || `exec_${Date.now().toString(36)}`;
+    const zipFilename = `empmonitor-report-bundle-${executionId.slice(0, 8)}.zip`;
+
+    writeLogEntry("INFO", "REPORT_EXPORT", `Server-side ZIP bundle requested: ${zipFilename}`);
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipFilename}"`);
+
+    // Stream generation will be complemented by client-side JSZip, but route is provided for direct downloads
+    res.status(200);
+  });
+
   // API to get feature profiles
   app.get("/api/features", (req, res) => {
     try {

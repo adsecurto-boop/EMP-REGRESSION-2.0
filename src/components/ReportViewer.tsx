@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -27,8 +27,15 @@ import {
   Minimize2,
   RefreshCw,
   SlidersHorizontal,
+  Archive,
+  Image as ImageIcon,
+  Check,
+  Sparkles,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { StructuredReport, FindingRecord, ReportSection } from '../types';
+import { generateStandaloneHtmlReport } from '../utils/reportHtmlGenerator';
+import { EvidenceGallery } from './EvidenceGallery';
 
 interface ReportViewerProps {
   report: StructuredReport | null;
@@ -93,6 +100,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
   onRunSuite,
   isLoading = false,
 }) => {
+  const [activeReportTab, setActiveReportTab] = useState<'findings' | 'gallery' | 'sections'>('findings');
   const [selectedVerdictFilter, setSelectedVerdictFilter] = useState<string>('ALL');
   const [selectedPluginFilter, setSelectedPluginFilter] = useState<string>('ALL');
   const [selectedLayerFilter, setSelectedLayerFilter] = useState<string>('ALL');
@@ -230,6 +238,20 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     setExpandedSections((prev) => ({ ...prev, [title]: prev[title] === false ? true : false }));
   };
 
+  const [isExportingZip, setIsExportingZip] = useState<boolean>(false);
+  const [evidenceList, setEvidenceList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/evidence/list')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.evidenceFiles)) {
+          setEvidenceList(data.evidenceFiles);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleCopyBugSummary = () => {
     if (!report) return;
     const failedFindings = allFindings.filter((f) => f.finding.verdict === 'FAILED' || f.finding.verdict === 'BLOCKED');
@@ -266,6 +288,93 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportFullReportZip = async () => {
+    if (!report) return;
+    setIsExportingZip(true);
+
+    try {
+      const zip = new JSZip();
+      const execIdShort = (metadata.execution_id || 'test').slice(0, 8);
+      const rootFolder = zip.folder(`empmonitor-report-${execIdShort}`) || zip;
+
+      // 1. Add current structured JSON report
+      const jsonContent = JSON.stringify(report, null, 2);
+      rootFolder.file('report.json', jsonContent);
+
+      // 2. Add full standalone HTML report
+      const htmlContent = generateStandaloneHtmlReport(report);
+      rootFolder.file('report.html', htmlContent);
+
+      // 3. Create evidence/ folder and fetch EV-013 proof screenshots & files
+      const evidenceFolder = rootFolder.folder('evidence');
+      
+      let fetchedEvidenceCount = 0;
+
+      // Fetch list of files from server
+      try {
+        const evRes = await fetch('/api/evidence/list');
+        const evData = await evRes.json();
+        const filesToDownload: any[] = (evData && evData.evidenceFiles) ? evData.evidenceFiles : [];
+
+        // Download each evidence item (especially EV-013 screenshot proofs)
+        for (const evFile of filesToDownload) {
+          try {
+            const fileRes = await fetch(`/api/evidence/file/${encodeURIComponent(evFile.filename)}`);
+            if (fileRes.ok) {
+              const blob = await fileRes.blob();
+              evidenceFolder?.file(evFile.filename, blob);
+              fetchedEvidenceCount++;
+            }
+          } catch (e) {
+            console.warn(`Could not fetch evidence file ${evFile.filename}:`, e);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query /api/evidence/list:', err);
+      }
+
+      // 4. Add README / Manifest file inside ZIP
+      const manifestContent = [
+        `EmpMonitor Test Automation & Validation Suite`,
+        `=============================================`,
+        `Execution ID:    ${metadata.execution_id}`,
+        `Generated At:    ${metadata.generated_at}`,
+        `Environment:     ${metadata.environment}`,
+        `Overall Verdict: ${summary.overall_verdict} (${summary.lowest_confidence} Confidence)`,
+        `Total Assertions: ${summary.total_findings}`,
+        `Evidence Included: ${fetchedEvidenceCount} objective screenshot/evidence files (EV-013)`,
+        ``,
+        `Bundle Contents:`,
+        `- report.html     : Interactive, self-contained executive test report`,
+        `- report.json     : Machine-readable 4-layer empirical validation dataset`,
+        `- evidence/       : EV-013 proof screenshots captured by Playwright and host inspections`,
+        ``,
+        `EmpMonitor Quality Assurance & Continuous Validation Framework`
+      ].join('\n');
+      rootFolder.file('README.txt', manifestContent);
+
+      // 5. Generate and trigger download
+      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = `empmonitor-full-report-${execIdShort}.zip`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      URL.revokeObjectURL(downloadUrl);
+
+      setCopiedNotification(`Full Report bundle ZIP created (${fetchedEvidenceCount} EV-013 evidence files included)!`);
+      setTimeout(() => setCopiedNotification(null), 4000);
+    } catch (err: any) {
+      console.error('Error generating export ZIP bundle:', err);
+      setCopiedNotification(`Export error: ${err?.message || 'Failed to assemble ZIP'}`);
+      setTimeout(() => setCopiedNotification(null), 4000);
+    } finally {
+      setIsExportingZip(false);
+    }
   };
 
   if (!report) {
@@ -344,7 +453,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
             <button
               onClick={handleCopyBugSummary}
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
@@ -355,11 +464,20 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
             </button>
             <button
               onClick={handleDownloadJson}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
               title="Download raw report.json artifact"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>Export JSON</span>
+            </button>
+            <button
+              onClick={handleExportFullReportZip}
+              disabled={isExportingZip}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+              title="Export complete ZIP bundle with HTML report and EV-013 proof screenshots from local filesystem"
+            >
+              <Archive className={`w-3.5 h-3.5 ${isExportingZip ? 'animate-bounce' : ''}`} />
+              <span>{isExportingZip ? 'Assembling ZIP...' : 'Export Full Report (ZIP)'}</span>
             </button>
           </div>
         </div>
@@ -450,382 +568,491 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search findings by test case, target path, hypothesis why, or evidence ID..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+      {/* Main View Navigation Tabs */}
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
+        <button
+          onClick={() => setActiveReportTab('findings')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeReportTab === 'findings'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>Test Findings & Hypotheses ({allFindings.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveReportTab('gallery')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeReportTab === 'gallery'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+          }`}
+        >
+          <ImageIcon className="w-4 h-4 text-emerald-400" />
+          <span>Evidence Gallery (EV-013)</span>
+          {evidenceList.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-950 border border-emerald-700 text-emerald-300">
+              {evidenceList.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveReportTab('sections')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeReportTab === 'sections'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+          }`}
+        >
+          <Cpu className="w-4 h-4" />
+          <span>Plugin Section Hierarchy ({(report.sections || []).length})</span>
+        </button>
+      </div>
+
+      {/* Tab View Contents */}
+      {activeReportTab === 'gallery' ? (
+        <EvidenceGallery
+          onExportZip={handleExportFullReportZip}
+          isExportingZip={isExportingZip}
+        />
+      ) : activeReportTab === 'sections' ? (
+        /* Section-by-Section Plugin Summary Breakdown */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
+              <Cpu className="w-4 h-4 text-indigo-400" />
+              <span>Execution Unit / Plugin Section Breakdown</span>
+            </h3>
+            <span className="text-xs text-slate-400">
+              Total Execution Units: <strong className="text-slate-200">{(report.sections || []).length}</strong>
+            </span>
           </div>
 
-          <div className="flex items-center space-x-2 flex-wrap gap-y-2 text-xs">
-            {/* Verdict Filter Buttons */}
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
-              {['ALL', 'FAILED', 'BLOCKED', 'INCONCLUSIVE', 'HEALTHY'].map((v) => (
+          <div className="space-y-3">
+            {(report.sections || []).length > 0 ? (
+              report.sections?.map((section) => {
+                const isSecExpanded = expandedSections[section.title] !== false;
+                const secVerdictMeta = VERDICT_CONFIG[section.verdict] || VERDICT_CONFIG.INCONCLUSIVE;
+
+                return (
+                  <div
+                    key={section.title}
+                    className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+                  >
+                    <div
+                      onClick={() => toggleSectionExpand(section.title)}
+                      className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="font-mono text-sm font-bold text-indigo-400">{section.title}</span>
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
+                        >
+                          {section.verdict}
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          Status: <strong className="text-slate-200">{section.status}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-3 text-xs text-slate-400">
+                        <span>{section.findings?.length ?? 0} assertions</span>
+                        {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </div>
+                    </div>
+
+                    {isSecExpanded && (
+                      <div className="p-4 bg-slate-950/60 border-t border-slate-800 text-xs space-y-4">
+                        {section.findings && section.findings.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Unit Assertions & Findings ({section.findings.length})
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {section.findings.map((f, fIdx) => (
+                                <div
+                                  key={fIdx}
+                                  className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-start justify-between gap-3"
+                                >
+                                  <div className="space-y-1">
+                                    <div className="flex items-center space-x-2">
+                                      <span
+                                        className={`text-[9px] font-bold font-mono px-1.5 py-0.2 rounded border ${
+                                          f.verdict === 'FAILED'
+                                            ? 'bg-rose-950 text-rose-300 border-rose-800'
+                                            : f.verdict === 'HEALTHY'
+                                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                            : 'bg-amber-950 text-amber-300 border-amber-800'
+                                        }`}
+                                      >
+                                        {f.verdict}
+                                      </span>
+                                      <span className="text-xs font-bold text-slate-200">{f.what}</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400">{f.why}</p>
+                                  </div>
+                                  <div className="font-mono text-[10px] text-indigo-300 shrink-0">
+                                    {f.evidence_ids?.join(', ') || 'No EV'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {section.metadata && Object.keys(section.metadata).length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Observed Host Inspection Telemetry
+                            </div>
+                            <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-48 border border-slate-800">
+                              {JSON.stringify(section.metadata, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : Array.isArray((report as any).results) ? (
+              (report as any).results.map((res: any) => {
+                const secTitle = res.name || res.plugin_id || 'Plugin';
+                const isSecExpanded = expandedSections[secTitle] !== false;
+                const secVerdictMeta = VERDICT_CONFIG[res.verdict] || VERDICT_CONFIG.HEALTHY;
+
+                return (
+                  <div
+                    key={secTitle}
+                    className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+                  >
+                    <div
+                      onClick={() => toggleSectionExpand(secTitle)}
+                      className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="font-mono text-sm font-bold text-indigo-400">{secTitle}</span>
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
+                        >
+                          {res.verdict || 'HEALTHY'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-3 text-xs text-slate-400">
+                        <span>{res.assertions?.length ?? 0} assertions</span>
+                        {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-4 bg-slate-950/40 rounded-lg text-center text-xs text-slate-400">
+                No section-level plugin breakdown available.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Test Findings & Hypotheses Tab */
+        <div className="space-y-6">
+          {/* Filter and Search Bar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search findings by test case, target path, hypothesis why, or evidence ID..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 flex-wrap gap-y-2 text-xs">
+                {/* Verdict Filter Buttons */}
+                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+                  {['ALL', 'FAILED', 'BLOCKED', 'INCONCLUSIVE', 'HEALTHY'].map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setSelectedVerdictFilter(v)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                        selectedVerdictFilter === v
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {v === 'ALL' ? 'All' : v}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Plugin Select */}
+                {pluginNames.length > 1 && (
+                  <select
+                    value={selectedPluginFilter}
+                    onChange={(e) => setSelectedPluginFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">All Plugins ({pluginNames.length})</option>
+                    {pluginNames.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Raw JSON toggle */}
                 <button
-                  key={v}
-                  onClick={() => setSelectedVerdictFilter(v)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
-                    selectedVerdictFilter === v
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                  onClick={() => setShowRawJson(!showRawJson)}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center space-x-1.5 transition ${
+                    showRawJson
+                      ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
                   }`}
                 >
-                  {v === 'ALL' ? 'All' : v}
+                  <FileCode2 className="w-3.5 h-3.5" />
+                  <span>{showRawJson ? 'Hide JSON' : 'View JSON'}</span>
                 </button>
-              ))}
+              </div>
             </div>
 
-            {/* Plugin Select */}
-            {pluginNames.length > 1 && (
-              <select
-                value={selectedPluginFilter}
-                onChange={(e) => setSelectedPluginFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="ALL">All Plugins ({pluginNames.length})</option>
-                {pluginNames.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Raw JSON toggle */}
-            <button
-              onClick={() => setShowRawJson(!showRawJson)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center space-x-1.5 transition ${
-                showRawJson
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <FileCode2 className="w-3.5 h-3.5" />
-              <span>{showRawJson ? 'Hide JSON' : 'View JSON'}</span>
-            </button>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+              <span>
+                Showing <strong className="text-slate-200">{filteredFindings.length}</strong> of{' '}
+                <strong className="text-slate-200">{allFindings.length}</strong> total test assertions
+              </span>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold"
+                >
+                  Clear Search
+                </button>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-          <span>
-            Showing <strong className="text-slate-200">{filteredFindings.length}</strong> of{' '}
-            <strong className="text-slate-200">{allFindings.length}</strong> total test assertions
-          </span>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="text-indigo-400 hover:text-indigo-300 font-semibold"
-            >
-              Clear Search
-            </button>
+          {/* Raw JSON Accordion View */}
+          {showRawJson && (
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-mono font-bold text-slate-300">report.json Artifact Data</span>
+                <button
+                  onClick={handleDownloadJson}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download File</span>
+                </button>
+              </div>
+              <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-96 border border-slate-800">
+                {JSON.stringify(report, null, 2)}
+              </pre>
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* Raw JSON Accordion View */}
-      {showRawJson && (
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-mono font-bold text-slate-300">report.json Artifact Data</span>
-            <button
-              onClick={handleDownloadJson}
-              className="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download File</span>
-            </button>
+          {/* Detailed Test Finding Cards */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
+                <Activity className="w-4 h-4 text-indigo-400" />
+                <span>Detailed Test Cases, Hypotheses & Objective Evidence</span>
+              </h3>
+              <button
+                onClick={() => setActiveReportTab('gallery')}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center space-x-1"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Open Evidence Gallery &rarr;</span>
+              </button>
+            </div>
+
+            {filteredFindings.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400 text-xs">
+                No findings match the current filter criteria.
+              </div>
+            ) : (
+              filteredFindings.map(({ finding, sectionTitle, index }) => {
+                const isExpanded = expandedFindings[index] !== false; // expanded by default
+                const isFailure = finding.verdict === 'FAILED';
+                const isBlocked = finding.verdict === 'BLOCKED';
+                const isInconclusive = finding.verdict === 'INCONCLUSIVE';
+
+                return (
+                  <div
+                    key={index}
+                    className={`bg-slate-900 border rounded-xl overflow-hidden transition-all ${
+                      isFailure
+                        ? 'border-rose-500/40 bg-rose-950/10'
+                        : isBlocked
+                        ? 'border-purple-500/40 bg-purple-950/10'
+                        : isInconclusive
+                        ? 'border-amber-500/40 bg-amber-950/10'
+                        : 'border-slate-800'
+                    }`}
+                  >
+                    {/* Finding Header */}
+                    <div
+                      onClick={() => toggleFindingExpand(index)}
+                      className="p-4 flex items-start justify-between cursor-pointer hover:bg-slate-800/40 transition gap-3"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="mt-0.5 shrink-0">
+                          {isFailure ? (
+                            <XCircle className="w-4 h-4 text-rose-400" />
+                          ) : isBlocked ? (
+                            <Ban className="w-4 h-4 text-purple-400" />
+                          ) : isInconclusive ? (
+                            <HelpCircle className="w-4 h-4 text-amber-400" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span
+                              className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                                isFailure
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  : isBlocked
+                                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                  : isInconclusive
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              }`}
+                            >
+                              {finding.verdict}
+                            </span>
+
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                              {sectionTitle}
+                            </span>
+
+                            {finding.failure_class && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-semibold">
+                                {finding.failure_class}
+                              </span>
+                            )}
+
+                            <span className="text-[10px] text-slate-400">
+                              Confidence: <strong className="text-slate-200">{finding.confidence}</strong>
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm font-bold text-slate-100">{finding.what}</h4>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 text-slate-400 mt-1">
+                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </div>
+                    </div>
+
+                    {/* Expanded Details Body */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-800/60 text-xs">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                          {/* Location & Scope ("Where") */}
+                          <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3 space-y-1.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                              <FolderTree className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>Test Boundary & Location (Where)</span>
+                            </div>
+                            <div className="font-mono text-xs text-indigo-300 bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 break-all">
+                              {finding.where}
+                            </div>
+                          </div>
+
+                          {/* Hypothesis & Root Cause ("Why") */}
+                          <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3 space-y-1.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                              <Info className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Hypothesis & Root Cause (Why)</span>
+                            </div>
+                            <p className="text-xs text-slate-300 leading-relaxed bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
+                              {finding.why}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Objective Evidence & Corroboration */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-950/50 rounded-lg border border-slate-800/80 text-[11px]">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span className="text-slate-400 font-semibold">Objective Evidence IDs:</span>
+                            {finding.evidence_ids?.length > 0 ? (
+                              finding.evidence_ids.map((evId) => (
+                                <span
+                                  key={evId}
+                                  className="font-mono text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded"
+                                >
+                                  {evId}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-slate-500">None cited</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <span className="text-slate-400 font-semibold">Layers Corroborated:</span>
+                            {finding.corroboration?.map((l) => (
+                              <span
+                                key={l}
+                                className="font-mono text-[10px] font-bold bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700"
+                              >
+                                {l}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Diagnostic Notes & Hypothesis Reasoning */}
+                        {finding.notes && finding.notes.length > 0 && (
+                          <div className="bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 space-y-1.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                              <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Validation Standard Diagnostic Notes</span>
+                            </div>
+                            <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
+                              {finding.notes.map((note, nIdx) => (
+                                <li key={nIdx} className="leading-relaxed">
+                                  {note}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Unresolved Evidence Conflicts (if any) */}
+                        {finding.conflicts && finding.conflicts.length > 0 && (
+                          <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-3 space-y-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center space-x-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Unresolved Evidence Conflicts</span>
+                            </div>
+                            <ul className="space-y-1 text-[11px] text-amber-200/90 list-disc list-inside">
+                              {finding.conflicts.map((conf, cIdx) => (
+                                <li key={cIdx}>{conf}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
-          <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-96 border border-slate-800">
-            {JSON.stringify(report, null, 2)}
-          </pre>
         </div>
       )}
-
-      {/* Detailed Test Finding Cards */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
-          <Activity className="w-4 h-4 text-indigo-400" />
-          <span>Detailed Test Cases, Hypotheses & Objective Evidence</span>
-        </h3>
-
-        {filteredFindings.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400 text-xs">
-            No findings match the current filter criteria.
-          </div>
-        ) : (
-          filteredFindings.map(({ finding, sectionTitle, index }) => {
-            const isExpanded = expandedFindings[index] !== false; // expanded by default
-            const isFailure = finding.verdict === 'FAILED';
-            const isBlocked = finding.verdict === 'BLOCKED';
-            const isInconclusive = finding.verdict === 'INCONCLUSIVE';
-            const isHealthy = finding.verdict === 'HEALTHY';
-
-            return (
-              <div
-                key={index}
-                className={`bg-slate-900 border rounded-xl overflow-hidden transition-all ${
-                  isFailure
-                    ? 'border-rose-500/40 bg-rose-950/10'
-                    : isBlocked
-                    ? 'border-purple-500/40 bg-purple-950/10'
-                    : isInconclusive
-                    ? 'border-amber-500/40 bg-amber-950/10'
-                    : 'border-slate-800'
-                }`}
-              >
-                {/* Finding Header */}
-                <div
-                  onClick={() => toggleFindingExpand(index)}
-                  className="p-4 flex items-start justify-between cursor-pointer hover:bg-slate-800/40 transition gap-3"
-                >
-                  <div className="flex items-start space-x-3">
-                    <div className="mt-0.5 shrink-0">
-                      {isFailure ? (
-                        <XCircle className="w-4 h-4 text-rose-400" />
-                      ) : isBlocked ? (
-                        <Ban className="w-4 h-4 text-purple-400" />
-                      ) : isInconclusive ? (
-                        <HelpCircle className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                        <span
-                          className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                            isFailure
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                              : isBlocked
-                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                              : isInconclusive
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          }`}
-                        >
-                          {finding.verdict}
-                        </span>
-
-                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                          {sectionTitle}
-                        </span>
-
-                        {finding.failure_class && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-semibold">
-                            {finding.failure_class}
-                          </span>
-                        )}
-
-                        <span className="text-[10px] text-slate-400">
-                          Confidence: <strong className="text-slate-200">{finding.confidence}</strong>
-                        </span>
-                      </div>
-
-                      <h4 className="text-sm font-bold text-slate-100">{finding.what}</h4>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 text-slate-400 mt-1">
-                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                  </div>
-                </div>
-
-                {/* Expanded Details Body */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-800/60 text-xs">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                      {/* Location & Scope ("Where") */}
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3 space-y-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
-                          <FolderTree className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Test Boundary & Location (Where)</span>
-                        </div>
-                        <div className="font-mono text-xs text-indigo-300 bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 break-all">
-                          {finding.where}
-                        </div>
-                      </div>
-
-                      {/* Hypothesis & Root Cause ("Why") */}
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3 space-y-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
-                          <Info className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Hypothesis & Root Cause (Why)</span>
-                        </div>
-                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
-                          {finding.why}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Objective Evidence & Corroboration */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-950/50 rounded-lg border border-slate-800/80 text-[11px]">
-                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                        <span className="text-slate-400 font-semibold">Objective Evidence IDs:</span>
-                        {finding.evidence_ids?.length > 0 ? (
-                          finding.evidence_ids.map((evId) => (
-                            <span
-                              key={evId}
-                              className="font-mono text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded"
-                            >
-                              {evId}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500">None cited</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <span className="text-slate-400 font-semibold">Layers Corroborated:</span>
-                        {finding.corroboration?.map((l) => (
-                          <span
-                            key={l}
-                            className="font-mono text-[10px] font-bold bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700"
-                          >
-                            {l}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Diagnostic Notes & Hypothesis Reasoning */}
-                    {finding.notes && finding.notes.length > 0 && (
-                      <div className="bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 space-y-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
-                          <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Validation Standard Diagnostic Notes</span>
-                        </div>
-                        <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
-                          {finding.notes.map((note, nIdx) => (
-                            <li key={nIdx} className="leading-relaxed">
-                              {note}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Unresolved Evidence Conflicts (if any) */}
-                    {finding.conflicts && finding.conflicts.length > 0 && (
-                      <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-3 space-y-1">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center space-x-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Unresolved Evidence Conflicts</span>
-                        </div>
-                        <ul className="space-y-1 text-[11px] text-amber-200/90 list-disc list-inside">
-                          {finding.conflicts.map((conf, cIdx) => (
-                            <li key={cIdx}>{conf}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Section-by-Section Plugin Summary Breakdown */}
-      <div className="space-y-4 pt-4 border-t border-slate-800">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
-          <Cpu className="w-4 h-4 text-indigo-400" />
-          <span>Execution Unit / Plugin Section Breakdown</span>
-        </h3>
-
-        <div className="space-y-3">
-          {(report.sections || []).length > 0 ? (
-            report.sections?.map((section) => {
-              const isSecExpanded = expandedSections[section.title] !== false;
-              const secVerdictMeta = VERDICT_CONFIG[section.verdict] || VERDICT_CONFIG.INCONCLUSIVE;
-
-              return (
-                <div
-                  key={section.title}
-                  className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
-                >
-                  <div
-                    onClick={() => toggleSectionExpand(section.title)}
-                    className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="font-mono text-sm font-bold text-indigo-400">{section.title}</span>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
-                      >
-                        {section.verdict}
-                      </span>
-                      <span className="text-xs text-slate-400 font-mono">
-                        Status: <strong className="text-slate-200">{section.status}</strong>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center space-x-3 text-xs text-slate-400">
-                      <span>{section.findings?.length ?? 0} assertions</span>
-                      {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </div>
-                  </div>
-
-                  {isSecExpanded && section.metadata && Object.keys(section.metadata).length > 0 && (
-                    <div className="p-4 bg-slate-950/60 border-t border-slate-800 text-xs space-y-3">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Observed Host Inspection Telemetry
-                      </div>
-                      <pre className="p-3 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto max-h-48 border border-slate-800">
-                        {JSON.stringify(section.metadata, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : Array.isArray((report as any).results) ? (
-            (report as any).results.map((res: any) => {
-              const secTitle = res.name || res.plugin_id || 'Plugin';
-              const isSecExpanded = expandedSections[secTitle] !== false;
-              const secVerdictMeta = VERDICT_CONFIG[res.verdict] || VERDICT_CONFIG.HEALTHY;
-
-              return (
-                <div
-                  key={secTitle}
-                  className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
-                >
-                  <div
-                    onClick={() => toggleSectionExpand(secTitle)}
-                    className="p-4 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="font-mono text-sm font-bold text-indigo-400">{secTitle}</span>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${secVerdictMeta.bg} ${secVerdictMeta.text} ${secVerdictMeta.border}`}
-                      >
-                        {res.verdict || 'HEALTHY'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center space-x-3 text-xs text-slate-400">
-                      <span>{res.assertions?.length ?? 0} assertions</span>
-                      {isSecExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-4 bg-slate-950/40 rounded-lg text-center text-xs text-slate-400">
-              No section-level plugin breakdown available.
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 };
