@@ -23,6 +23,12 @@ from framework.shared.models import (
 
 __all__ = ["ScreenshotFrequencyValidator", "ScreenshotCadenceValidator"]
 
+# Performance Optimization (⚡ Bolt): Pre-compile regex patterns at module load time.
+# Re-compiling regular expressions inside frequently invoked loops (like timestamp parsing across
+# large lists of screenshots) creates unnecessary allocations and CPU overhead.
+TIMESTAMP_PATTERN = re.compile(r"(\d{4}-)?(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})")
+YEAR_PREFIX_PATTERN = re.compile(r"^\d{4}")
+
 
 class ScreenshotFrequencyValidator:
     """Measures timestamp delta drift across L2 local storage and L4 UI rendering."""
@@ -32,12 +38,12 @@ class ScreenshotFrequencyValidator:
 
     @staticmethod
     def parse_ui_timestamp(sc_title: str) -> datetime:
-        match = re.search(r"(\d{4}-)?(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})", sc_title)
+        match = TIMESTAMP_PATTERN.search(sc_title)
         if not match:
             raise ValueError(f"Unable to parse timestamp from screenshot title: {sc_title}")
 
         raw_ts = match.group(0)
-        if not re.match(r"^\d{4}", raw_ts):
+        if not YEAR_PREFIX_PATTERN.match(raw_ts):
             raw_ts = f"{datetime.now().year}-{raw_ts.lstrip('-')}"
 
         return datetime.strptime(raw_ts, "%Y-%m-%d %H:%M:%S")
