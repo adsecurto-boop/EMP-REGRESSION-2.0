@@ -311,28 +311,43 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
       const evidenceFolder = rootFolder.folder('evidence');
       
       let fetchedEvidenceCount = 0;
+      let filesToDownload: any[] = [];
 
-      // Fetch list of files from server
-      try {
-        const evRes = await fetch('/api/evidence/list');
-        const evData = await evRes.json();
-        const filesToDownload: any[] = (evData && evData.evidenceFiles) ? evData.evidenceFiles : [];
-
-        // Download each evidence item (especially EV-013 screenshot proofs)
-        for (const evFile of filesToDownload) {
-          try {
-            const fileRes = await fetch(`/api/evidence/file/${encodeURIComponent(evFile.filename)}`);
-            if (fileRes.ok) {
-              const blob = await fileRes.blob();
-              evidenceFolder?.file(evFile.filename, blob);
-              fetchedEvidenceCount++;
-            }
-          } catch (e) {
-            console.warn(`Could not fetch evidence file ${evFile.filename}:`, e);
+      // Check Electron IPC bridge first
+      if (typeof window !== 'undefined' && (window as any).electronAPI?.listEvidenceFiles) {
+        try {
+          const result = await (window as any).electronAPI.listEvidenceFiles();
+          if (result && result.success && Array.isArray(result.files) && result.files.length > 0) {
+            filesToDownload = result.files;
           }
+        } catch (e) {
+          console.warn('Electron listEvidenceFiles failed, falling back to HTTP:', e);
         }
-      } catch (err) {
-        console.warn('Failed to query /api/evidence/list:', err);
+      }
+
+      // Fallback to Express /api/evidence/list endpoint
+      if (filesToDownload.length === 0) {
+        try {
+          const evRes = await fetch('/api/evidence/list');
+          const evData = await evRes.json();
+          filesToDownload = (evData && evData.evidenceFiles) ? evData.evidenceFiles : [];
+        } catch (err) {
+          console.warn('Failed to query /api/evidence/list:', err);
+        }
+      }
+
+      // Download each evidence item (especially EV-013 screenshot proofs)
+      for (const evFile of filesToDownload) {
+        try {
+          const fileRes = await fetch(`/api/evidence/file/${encodeURIComponent(evFile.filename)}`);
+          if (fileRes.ok) {
+            const blob = await fileRes.blob();
+            evidenceFolder?.file(evFile.filename, blob);
+            fetchedEvidenceCount++;
+          }
+        } catch (e) {
+          console.warn(`Could not fetch evidence file ${evFile.filename}:`, e);
+        }
       }
 
       // 4. Add README / Manifest file inside ZIP

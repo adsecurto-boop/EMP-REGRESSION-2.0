@@ -504,7 +504,7 @@ ipcMain.handle('list-evidence-files', () => {
     const fs = require('fs');
     const evidenceDir = path.join(__dirname, '../reports/evidence');
     if (!fs.existsSync(evidenceDir)) {
-      return { success: true, files: [] };
+      fs.mkdirSync(evidenceDir, { recursive: true });
     }
     const files = fs.readdirSync(evidenceDir);
     const items = files.map((filename) => {

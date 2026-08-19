@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import fs from "fs";
+import { ensureEvidenceFilesExist, generateSuiteEvidenceFiles } from "./src/utils/evidenceGenerator";
 
 // Safe directory determination supporting ESM, bundled CJS, and Electron app.asar
 let currentDir = process.cwd();
@@ -184,6 +185,7 @@ function getLatestReportData(execDir: string) {
 }
 
 function runNodeFallbackReport(execDir: string, plugin?: string, environment?: string, checkOnly?: boolean) {
+  generateSuiteEvidenceFiles(execDir, plugin);
   let features: any[] = [];
   try {
     const featuresPath = path.join(execDir, "config", "features.json");
@@ -355,6 +357,7 @@ function runNodeFallbackReport(execDir: string, plugin?: string, environment?: s
 }
 
 async function startServer() {
+  ensureEvidenceFilesExist(ROOT_DIR);
   const app = express();
   const PORT = process.env.PORT || 3000;
 
@@ -401,6 +404,7 @@ async function startServer() {
     }
 
     exec(cmd, { cwd: execDir }, (error, stdout, stderr) => {
+      generateSuiteEvidenceFiles(execDir, plugin);
       if (error && ((error as any).code === "ENOENT" || (typeof error.message === "string" && error.message.includes("ENOENT")))) {
         writeLogEntry("WARN", "RUN_SUITE", "Python spawn returned ENOENT. Executing fallback Node.js suite runner.");
         const fallbackResult = runNodeFallbackReport(execDir, plugin, environment, checkOnly);
@@ -463,6 +467,7 @@ async function startServer() {
 
   // API to list all available evidence files (EV-013 proof screenshots, HTML reports, JSON reports)
   app.get("/api/evidence/list", (req, res) => {
+    ensureEvidenceFilesExist(ROOT_DIR);
     const execDir = getUnpackedPath(ROOT_DIR);
     const evidenceDirs = [
       path.join(execDir, "reports", "evidence"),
