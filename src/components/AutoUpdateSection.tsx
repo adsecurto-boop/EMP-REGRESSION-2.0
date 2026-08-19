@@ -214,7 +214,7 @@ export const AutoUpdateSection: React.FC<AutoUpdateSectionProps> = ({
                 <span className={`font-semibold font-mono uppercase px-2.5 py-0.5 rounded text-[11px] border ${
                   updaterState.status === 'error'
                     ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                    : updaterState.status === 'downloaded'
+                    : (updaterState.status === 'downloaded' || updaterState.status === 'installed')
                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                     : updaterState.status === 'checking'
                     ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 animate-pulse'
