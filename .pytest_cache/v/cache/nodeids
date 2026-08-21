@@ -3,5 +3,10 @@
   "codegen/reporting/test_reporting_system.py::test_catalog_loader",
   "codegen/reporting/test_reporting_system.py::test_custom_decorator_marker",
   "codegen/reporting/test_reporting_system.py::test_mask_secrets",
-  "codegen/reporting/test_reporting_system.py::test_report_generators"
+  "codegen/reporting/test_reporting_system.py::test_report_generators",
+  "tests/test_auto_update_r2_sync.py::TestAutoUpdateR2Sync::test_verify_r2_autoupdate_4layer_pipeline",
+  "tests/test_em010_frequency_sync.py::TestScreenshotFrequencySync::test_correlation_reducer_healthy_reduction",
+  "tests/test_em010_frequency_sync.py::TestScreenshotFrequencySync::test_failure_mode_detection_scenarios",
+  "tests/test_em010_frequency_sync.py::TestScreenshotFrequencySync::test_plugin_correlate_with_mock_evidence",
+  "tests/test_em010_frequency_sync.py::TestScreenshotFrequencySync::test_screenshot_upload_cadence_correlation"
 ]
