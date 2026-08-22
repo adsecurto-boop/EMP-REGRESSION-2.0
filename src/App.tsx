@@ -40,6 +40,9 @@ interface ToastNotification {
 
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
 
+// Regex for parsing standard log entries: [Timestamp] [Level] [Category] Message
+const LOG_LINE_REGEX = /^\[(.*?)\]\s*\[(.*?)\]\s*\[(.*?)\]\s*(.*)$/;
+
 export default function App() {
   const [features, setFeatures] = useState<FeatureProfile[]>([]);
   const [desktopStatus, setDesktopStatus] = useState<DesktopStatus | null>(null);
@@ -206,6 +209,63 @@ export default function App() {
   const [logFilterCategory, setLogFilterCategory] = useState<'ALL' | 'AUTO_UPDATE' | 'RUN_SUITE' | 'CHROME_INSPECTOR' | 'SYSTEM'>('ALL');
   const [logSearchTerm, setLogSearchTerm] = useState<string>('');
   const [isCheckingUpdates, setIsCheckingUpdates] = useState<boolean>(false);
+
+  // Performance Optimization: Memoize raw log parsing to avoid O(N) regex matching and string splitting on every render tick
+  const parsedLogs = useMemo(() => {
+    if (!logs) return [];
+    const rawLines = logs.split('\n');
+    return rawLines.map((line, idx) => {
+      const match = line.match(LOG_LINE_REGEX);
+      if (match) {
+        return {
+          id: idx,
+          timestamp: match[1],
+          level: match[2],
+          category: match[3],
+          message: match[4],
+          raw: line,
+        };
+      }
+      return {
+        id: idx,
+        timestamp: '',
+        level: 'INFO',
+        category: 'SYSTEM',
+        message: line,
+        raw: line,
+      };
+    });
+  }, [logs]);
+
+  // Performance Optimization: Memoize filtered logs and count metrics so keypresses/searches avoid re-calculating stats
+  const { filteredLogs, autoUpdateTotal, autoUpdateErrors } = useMemo(() => {
+    const autoTotal = parsedLogs.filter(l => l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')).length;
+    const autoErrors = parsedLogs.filter(l => (l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')) && (l.level === 'ERROR' || l.raw.includes('[ERROR]'))).length;
+
+    const filtered = parsedLogs.filter((l) => {
+      if (logFilterCategory === 'AUTO_UPDATE') {
+        if (l.category !== 'AUTO_UPDATE' && l.category !== 'AUTO_UPDATER' && !l.raw.includes('AUTO_UPDATE') && !l.raw.includes('AUTO_UPDATER')) return false;
+      } else if (logFilterCategory === 'RUN_SUITE') {
+        if (l.category !== 'RUN_SUITE' && !l.raw.includes('RUN_SUITE')) return false;
+      } else if (logFilterCategory === 'CHROME_INSPECTOR') {
+        if (l.category !== 'CHROME_INSPECTOR' && !l.raw.includes('CHROME_INSPECTOR')) return false;
+      } else if (logFilterCategory === 'SYSTEM') {
+        if (l.category !== 'SYSTEM' && !l.raw.includes('SYSTEM')) return false;
+      }
+
+      if (logSearchTerm.trim()) {
+        const term = logSearchTerm.toLowerCase();
+        return l.raw.toLowerCase().includes(term);
+      }
+      return true;
+    });
+
+    return {
+      filteredLogs: filtered,
+      autoUpdateTotal: autoTotal,
+      autoUpdateErrors: autoErrors,
+    };
+  }, [parsedLogs, logFilterCategory, logSearchTerm]);
 
   const handleTriggerUpdateCheck = async () => {
     setIsCheckingUpdates(true);
@@ -1692,53 +1752,8 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'logs' && (() => {
-              const rawLines = logs ? logs.split('\n') : [];
-              const parsed = rawLines.map((line, idx) => {
-                const match = line.match(/^\[(.*?)\]\s*\[(.*?)\]\s*\[(.*?)\]\s*(.*)$/);
-                if (match) {
-                  return {
-                    id: idx,
-                    timestamp: match[1],
-                    level: match[2],
-                    category: match[3],
-                    message: match[4],
-                    raw: line,
-                  };
-                }
-                return {
-                  id: idx,
-                  timestamp: '',
-                  level: 'INFO',
-                  category: 'SYSTEM',
-                  message: line,
-                  raw: line,
-                };
-              });
-
-              const autoUpdateTotal = parsed.filter(l => l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')).length;
-              const autoUpdateErrors = parsed.filter(l => (l.category === 'AUTO_UPDATE' || l.category === 'AUTO_UPDATER' || l.raw.includes('AUTO_UPDATE')) && (l.level === 'ERROR' || l.raw.includes('[ERROR]'))).length;
-
-              const filtered = parsed.filter((l) => {
-                if (logFilterCategory === 'AUTO_UPDATE') {
-                  if (l.category !== 'AUTO_UPDATE' && l.category !== 'AUTO_UPDATER' && !l.raw.includes('AUTO_UPDATE') && !l.raw.includes('AUTO_UPDATER')) return false;
-                } else if (logFilterCategory === 'RUN_SUITE') {
-                  if (l.category !== 'RUN_SUITE' && !l.raw.includes('RUN_SUITE')) return false;
-                } else if (logFilterCategory === 'CHROME_INSPECTOR') {
-                  if (l.category !== 'CHROME_INSPECTOR' && !l.raw.includes('CHROME_INSPECTOR')) return false;
-                } else if (logFilterCategory === 'SYSTEM') {
-                  if (l.category !== 'SYSTEM' && !l.raw.includes('SYSTEM')) return false;
-                }
-
-                if (logSearchTerm.trim()) {
-                  const term = logSearchTerm.toLowerCase();
-                  return l.raw.toLowerCase().includes(term);
-                }
-                return true;
-              });
-
-              return (
-                <div className="space-y-5">
+            {activeTab === 'logs' && (
+              <div className="space-y-5">
                   {/* Auto-Update System Diagnostic & Status Box */}
                   <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
@@ -1881,7 +1896,7 @@ export default function App() {
                             : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        All Logs ({parsed.length})
+                        All Logs ({parsedLogs.length})
                       </button>
 
                       <button
@@ -1954,8 +1969,8 @@ export default function App() {
 
                   {/* Log View Area */}
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-x-auto max-h-[550px] overflow-y-auto leading-relaxed shadow-inner space-y-1.5">
-                    {filtered.length > 0 ? (
-                      filtered.map((item) => {
+                    {filteredLogs.length > 0 ? (
+                      filteredLogs.map((item) => {
                         const isAutoUpdate = item.category === 'AUTO_UPDATE' || item.category === 'AUTO_UPDATER' || item.raw.includes('AUTO_UPDATE');
                         const isError = item.level === 'ERROR' || item.raw.includes('[ERROR]');
                         const isSuccess = item.level === 'SUCCESS' || item.raw.includes('[SUCCESS]');
@@ -2030,8 +2045,7 @@ export default function App() {
                     )}
                   </div>
                 </div>
-              );
-            })()}
+            )}
           </div>
         </main>
       </div>
